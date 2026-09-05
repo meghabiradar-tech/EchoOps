@@ -1,7 +1,13 @@
-import React from 'react';
-import { CheckCircle, ShieldCheck, Database, Check } from 'lucide-react';
+'use client';
 
-export default function FactsCard({ facts }) {
+import React from 'react';
+import { ShieldCheck, Check } from 'lucide-react';
+import { useIncidentContext } from '../context/IncidentContext';
+
+export default function FactsCard(props) {
+  const context = useIncidentContext();
+  const facts = props?.facts || context?.confirmedFacts || context?.facts || [];
+
   return (
     <div className="card" aria-label="Confirmed Incident Facts">
       <div className="card-header">
@@ -11,7 +17,11 @@ export default function FactsCard({ facts }) {
           </div>
           <h2 className="card-title">Confirmed Facts</h2>
         </div>
-        <span className="card-badge-count" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>
+        <span
+          className="card-badge-count"
+          style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}
+          id="confirmed-facts-count"
+        >
           {facts.length} Verified
         </span>
       </div>
@@ -23,7 +33,7 @@ export default function FactsCard({ facts }) {
               <div className="fact-header-row">
                 <span className="confirmed-badge">
                   <Check size={12} strokeWidth={3} />
-                  Confirmed
+                  {f.confidence || 'Confirmed'}
                 </span>
                 <span className="font-mono text-dim" style={{ fontSize: '0.72rem' }}>
                   {f.timestamp}
@@ -33,7 +43,9 @@ export default function FactsCard({ facts }) {
               <p className="fact-text">{f.fact}</p>
 
               <div className="fact-footer-row">
-                <span>Verified via: <strong style={{ color: '#475569' }}>{f.verifiedBy}</strong></span>
+                <span>
+                  Verified via: <strong style={{ color: '#475569' }}>{f.verifiedBy}</strong>
+                </span>
               </div>
             </div>
           ))}

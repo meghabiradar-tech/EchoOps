@@ -1,9 +1,15 @@
-import React from 'react';
-import { HelpCircle, AlertCircle, Sparkles } from 'lucide-react';
+'use client';
 
-export default function AssumptionsCard({ assumptions }) {
+import React from 'react';
+import { HelpCircle, AlertCircle } from 'lucide-react';
+import { useIncidentContext } from '../context/IncidentContext';
+
+export default function AssumptionsCard(props) {
+  const context = useIncidentContext();
+  const assumptions = props?.assumptions || context?.hypotheses || context?.assumptions || [];
+
   return (
-    <div className="card" aria-label="Unconfirmed Assumptions">
+    <div className="card" aria-label="Unconfirmed Assumptions and Hypotheses">
       <div className="card-header">
         <div className="card-title-group">
           <div className="card-icon-badge" style={{ background: '#fffbeb', color: '#d97706' }}>
@@ -11,7 +17,11 @@ export default function AssumptionsCard({ assumptions }) {
           </div>
           <h2 className="card-title">Assumptions & Hypotheses</h2>
         </div>
-        <span className="card-badge-count" style={{ background: '#fffbeb', color: '#b45309', borderColor: '#fde68a' }}>
+        <span
+          className="card-badge-count"
+          style={{ background: '#fffbeb', color: '#b45309', borderColor: '#fde68a' }}
+          id="hypotheses-count"
+        >
           {assumptions.length} Unconfirmed
         </span>
       </div>
@@ -25,7 +35,13 @@ export default function AssumptionsCard({ assumptions }) {
                   <AlertCircle size={12} strokeWidth={2.5} />
                   {a.status}
                 </span>
-                <span style={{ fontSize: '0.7rem', fontWeight: '700', color: a.riskLevel === 'High' ? '#dc2626' : '#d97706' }}>
+                <span
+                  style={{
+                    fontSize: '0.7rem',
+                    fontWeight: '700',
+                    color: a.riskLevel === 'High' ? '#dc2626' : a.riskLevel === 'Medium' ? '#d97706' : '#16a34a',
+                  }}
+                >
                   Risk: {a.riskLevel}
                 </span>
               </div>
@@ -33,7 +49,9 @@ export default function AssumptionsCard({ assumptions }) {
               <p className="assumption-text">{a.hypothesis}</p>
 
               <div className="assumption-footer-row">
-                <span>Source: <strong style={{ color: '#475569' }}>{a.source}</strong></span>
+                <span>
+                  Source: <strong style={{ color: '#475569' }}>{a.source}</strong>
+                </span>
               </div>
             </div>
           ))}

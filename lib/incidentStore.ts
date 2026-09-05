@@ -5,7 +5,6 @@ import type {
   PostIncidentReview,
   IncidentTimelineEvent,
   IncidentFact,
-  IncidentHypothesis,
   IncidentActionItem,
   IncidentConflict,
   MissingInfoGap,

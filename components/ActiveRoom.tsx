@@ -47,6 +47,7 @@ import { QuickstartTranscriptPanel } from './QuickstartTranscriptPanel';
 import { RunbookQuickActions } from './RunbookQuickActions';
 import type { ActiveRoomProps, ConversationComponentProps } from '@/types/conversation';
 import { useAiSpeechHandler } from '@/hooks/useAiSpeechHandler';
+import { useIncidentContext } from '@/src/context/IncidentContext';
 import {
   useSpeechCapture,
   type AgoraSpeechUpdate,
@@ -137,6 +138,12 @@ export function ActiveRoom({
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const [isInterrupted, setIsInterrupted] = useState(false);
 
+  const incidentCtx = useIncidentContext();
+  const incidentCtxRef = useRef(incidentCtx);
+  useEffect(() => {
+    incidentCtxRef.current = incidentCtx;
+  }, [incidentCtx]);
+
   const {
     processUserSpeech,
     assistantReply,
@@ -144,7 +151,18 @@ export function ActiveRoom({
     isProcessing: isCopilotProcessing,
     latestMetrics,
     abortPendingSpeech,
-  } = useAiSpeechHandler({ channel: agoraData.channel });
+  } = useAiSpeechHandler({
+    channel: agoraData.channel,
+    onStateDelta: (delta) => {
+      incidentCtxRef.current?.applyStateDelta(delta);
+    },
+    onBotSpeech: (speechText) => {
+      incidentCtxRef.current?.addTranscript({
+        speaker: 'EchoOps AI Commander',
+        text: speechText,
+      });
+    },
+  });
 
   // Tracks granular RTC connection state for the status dot.
   const [connectionState, setConnectionState] = useState<string>('CONNECTING');
@@ -209,6 +227,59 @@ export function ActiveRoom({
   );
 
   const { localMicrophoneTrack } = useLocalMicrophoneTrack(isReady);
+  const [micPermissionError, setMicPermissionError] = useState<string | null>(null);
+
+  // Audio initialization and mic permission probe
+  const requestMicrophoneAccess = useCallback(async () => {
+    if (!process.env.NEXT_PUBLIC_AGORA_APP_ID) {
+      console.warn(
+        '[EchoOps] NEXT_PUBLIC_AGORA_APP_ID is undefined in environment variables. Agora RTC connection may fail.',
+      );
+    }
+
+    if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop test probe stream so Agora's useLocalMicrophoneTrack manages the actual hardware track
+      stream.getTracks().forEach((track) => track.stop());
+      setMicPermissionError(null);
+    } catch (err: unknown) {
+      const error = err as Error;
+      if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') {
+        const msg =
+          'Microphone permission denied (NotAllowedError). Please allow microphone access to speak in the war room.';
+        console.warn(`[EchoOps] ${msg}`);
+        setMicPermissionError(msg);
+      } else {
+        console.warn('[EchoOps] Microphone stream acquisition warning:', error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    requestMicrophoneAccess();
+  }, [requestMicrophoneAccess]);
+
+  // Wire incoming Agora remote audio track listener so received bot speech streams directly to audio element
+  useClientEvent(client, 'user-published', async (user, mediaType) => {
+    try {
+      await client.subscribe(user, mediaType);
+      if (mediaType === 'audio') {
+        user.audioTrack?.play();
+        console.info(`[EchoOps] Subscribed and playing remote audio track for UID: ${user.uid}`);
+      }
+    } catch (err) {
+      console.warn('[EchoOps] Error subscribing to remote audio track:', err);
+    }
+  });
+
+  useClientEvent(client, 'user-unpublished', (user, mediaType) => {
+    if (mediaType === 'audio') {
+      user.audioTrack?.stop();
+      console.info(`[EchoOps] Stopped remote audio track for UID: ${user.uid}`);
+    }
+  });
 
   useEffect(() => {
     if (!client) return;
@@ -290,13 +361,37 @@ export function ActiveRoom({
   }, [isVadActive]);
 
   // Hook handles transcript accumulation and mutes when bot is speaking
-  const { flushTranscript } = useSpeechCapture({
+  const { interimTranscript, flushTranscript } = useSpeechCapture({
     isMicActive: isReady && isEnabled && Boolean(localMicrophoneTrack),
     isVadActive: isVadActive && !isBotSpeaking,
     isBotSpeaking,
     agoraTranscriptionAvailable,
     agoraSpeech: isBotSpeaking ? null : agoraSpeech,
-    onUtteranceComplete: processUserSpeech,
+    onUtteranceComplete: (text) => {
+      const cleanText = text.trim();
+      processUserSpeech(cleanText);
+      if (cleanText) {
+        incidentCtxRef.current?.addTranscript({
+          speaker: 'You (Human Operator)',
+          text: cleanText,
+        });
+      }
+      // Append captured utterance to rawTranscript if Agora backend STT hasn't pushed it
+      if (!agoraTranscriptionAvailable && cleanText) {
+        setRawTranscript((prev) => [
+          ...prev,
+          {
+            uid: '0',
+            text: cleanText,
+            status: TurnStatus.END,
+            turn_id: Date.now(),
+            _time: Date.now(),
+            stream_id: 0,
+            metadata: null,
+          },
+        ]);
+      }
+    },
   });
 
   const flushTranscriptRef = useRef(flushTranscript);
@@ -461,6 +556,17 @@ export function ActiveRoom({
               if (forwardedRef.ids.has(id)) return;
               forwardedRef.ids.add(id);
 
+              if (item.text && item.text.trim()) {
+                const isUser = item.uid === '0' || String(item.uid) === String(client.uid);
+                // Only push remote turns if not already added by local utterance handler
+                if (!isUser) {
+                  incidentCtxRef.current?.addTranscript({
+                    speaker: 'EchoOps AI Commander',
+                    text: item.text.trim(),
+                  });
+                }
+              }
+
               const payload = {
                 audio_stream: null,
                 text: item.text,
@@ -624,8 +730,23 @@ export function ActiveRoom({
   }, [rtmClient, addConnectionIssue]);
 
   const transcript = useMemo(() => {
-    return normalizeTranscript(rawTranscript, String(client.uid));
-  }, [rawTranscript, client.uid]);
+    const base = normalizeTranscript(rawTranscript, String(client.uid));
+    if (!agoraTranscriptionAvailable && interimTranscript.trim() && !isBotSpeaking) {
+      return [
+        ...base,
+        {
+          uid: String(client.uid),
+          text: interimTranscript.trim(),
+          status: TurnStatus.IN_PROGRESS,
+          turn_id: 0,
+          _time: 0,
+          stream_id: 0,
+          metadata: null,
+        },
+      ];
+    }
+    return base;
+  }, [rawTranscript, client.uid, agoraTranscriptionAvailable, interimTranscript, isBotSpeaking]);
 
   const activeInProgress = useMemo(() => {
     return transcript.find((entry) => entry.status === TurnStatus.IN_PROGRESS) ?? null;
@@ -734,6 +855,14 @@ export function ActiveRoom({
               <span className={`inline-flex h-2 w-2 rounded-full ${isAgentConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
               <span className="text-xs text-muted-foreground">{isAgentConnected ? 'Bot live' : 'Bot not present'}</span>
             </div>
+            {micPermissionError && (
+              <div className="flex items-center gap-2 rounded border border-destructive/40 bg-destructive/15 px-2 py-0.5 text-xs text-destructive">
+                <span className="max-w-xs truncate" title={micPermissionError}>⚠️ {micPermissionError}</span>
+                <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5 shrink-0" onClick={requestMicrophoneAccess}>
+                  Retry Mic
+                </Button>
+              </div>
+            )}
             <div className="flex items-center gap-1.5 ml-2">
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium ${

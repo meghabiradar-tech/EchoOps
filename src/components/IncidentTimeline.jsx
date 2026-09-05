@@ -1,7 +1,13 @@
+'use client';
+
 import React from 'react';
 import { Clock, AlertTriangle, XCircle, Sparkles, ShieldX, CheckCircle2 } from 'lucide-react';
+import { useIncidentContext } from '../context/IncidentContext';
 
-export default function IncidentTimeline({ timeline }) {
+export default function IncidentTimeline(props) {
+  const context = useIncidentContext();
+  const timeline = props?.timeline || context?.timeline || [];
+
   const getNodeIcon = (type) => {
     switch (type) {
       case 'alert':
@@ -28,7 +34,7 @@ export default function IncidentTimeline({ timeline }) {
           </div>
           <h2 className="card-title">Incident Timeline</h2>
         </div>
-        <span className="card-badge-count">{timeline.length} Chronological Events</span>
+        <span className="card-badge-count" id="timeline-events-count">{timeline.length} Chronological Events</span>
       </div>
 
       <div className="card-body">
@@ -37,7 +43,7 @@ export default function IncidentTimeline({ timeline }) {
             {timeline.map((item) => (
               <div key={item.id} className="timeline-item">
                 {/* Node icon with type-specific color */}
-                <div className={`timeline-node ${item.type}`} title={item.type}>
+                <div className={`timeline-node ${item.type || 'system'}`} title={item.type || 'system'}>
                   {getNodeIcon(item.type)}
                 </div>
 

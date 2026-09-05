@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { startAiTurn, type AiTurnMetrics } from '@/lib/aiMetrics';
 import type { SreAction } from '@/lib/sreTools';
+import type { IncidentStateDelta } from '@/app/api/ai/respond/route';
 
 type SpeechHistoryItem = {
   role: string;
@@ -11,16 +12,57 @@ type SpeechHistoryItem = {
 
 type UseAiSpeechHandlerOptions = {
   channel: string;
+  onStateDelta?: (delta: IncidentStateDelta) => void;
+  onBotSpeech?: (text: string) => void;
 };
 
 type RespondPayload = {
   type?: unknown;
   text?: unknown;
+  speech?: unknown;
+  stateDelta?: unknown;
   error?: unknown;
   actionsExecuted?: unknown;
 };
 
-export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
+export function playAudibleSpeech(text: string) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const clean = text.replace(/[*_#`]/g, '').trim();
+    if (!clean) return;
+    const utterance = new SpeechSynthesisUtterance(clean);
+    utterance.rate = 1.05;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice =
+      voices.find(
+        (v) =>
+          v.lang.startsWith('en') &&
+          (v.name.includes('Natural') ||
+            v.name.includes('Google') ||
+            v.name.includes('Samantha') ||
+            v.name.includes('Daniel') ||
+            v.name.includes('Alex')),
+      ) || voices.find((v) => v.lang.startsWith('en'));
+
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    window.speechSynthesis.speak(utterance);
+  } catch (err) {
+    console.warn('[EchoOps] Browser speech synthesis error:', err);
+  }
+}
+
+export function useAiSpeechHandler({
+  channel,
+  onStateDelta,
+  onBotSpeech,
+}: UseAiSpeechHandlerOptions) {
   const [assistantReply, setAssistantReply] = useState<string | null>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -29,12 +71,18 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
   const isProcessingRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  const onStateDeltaRef = useRef(onStateDelta);
+  const onBotSpeechRef = useRef(onBotSpeech);
+
+  onStateDeltaRef.current = onStateDelta;
+  onBotSpeechRef.current = onBotSpeech;
+
   const processUserSpeech = useCallback(
     async (transcript: string, history: SpeechHistoryItem[] = []) => {
       const normalizedTranscript = transcript.trim();
       if (!normalizedTranscript) return;
 
-      // Ensure any in-flight request is immediately aborted before starting a new turn
+      // Abort any in-flight requests
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -48,33 +96,6 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
       setAssistantReply('');
       setActionsExecuted([]);
       const metrics = startAiTurn();
-      let receivedChunk = false;
-      let queuedSpeech = Promise.resolve();
-
-      const queueSpeechChunk = (text: string) => {
-        const chunk = text.trim();
-        if (!chunk || abortController.signal.aborted) return;
-        if (!receivedChunk) {
-          receivedChunk = true;
-          metrics.markLlmReady();
-          setLatestMetrics(metrics.markSpeakTriggered());
-        }
-        setAssistantReply((previous) => `${previous ?? ''}${text}`);
-        queuedSpeech = queuedSpeech.then(async () => {
-          if (abortController.signal.aborted) return;
-          const speakResponse = await fetch('/api/bot/speak', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: chunk, priority: 'high', channel }),
-            signal: abortController.signal,
-          });
-          if (!speakResponse.ok) {
-            throw new Error('The SRE copilot reply could not be sent to the room.');
-          }
-        });
-      };
-
-      let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
       try {
         // Ingest user speech into PostgreSQL database & state machine
@@ -89,99 +110,152 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
         }).catch((err) => console.warn('Turn persistence note:', err));
 
         metrics.markLlmRequest();
+
         const respondResponse = await fetch('/api/ai/respond', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
           body: JSON.stringify({ transcript: normalizedTranscript, history }),
           signal: abortController.signal,
         });
-        if (!respondResponse.ok || !respondResponse.body) {
-          const errorPayload = (await respondResponse.json()) as RespondPayload;
-          throw new Error(
-            typeof errorPayload.error === 'string'
-              ? errorPayload.error
-              : 'The SRE copilot could not respond.',
-          );
+
+        if (!respondResponse.ok) {
+          throw new Error(`AI copilot error (HTTP ${respondResponse.status})`);
         }
 
-        reader = respondResponse.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let streamDone = false;
-        let completeAssistantReply = '';
+        const contentType = respondResponse.headers.get('content-type') || '';
 
-        const handleEvent = (rawEvent: string) => {
+        // Case 1: Standard JSON response containing { speech, stateDelta }
+        if (contentType.includes('application/json')) {
+          const data = (await respondResponse.json()) as {
+            speech?: string;
+            stateDelta?: IncidentStateDelta;
+          };
+
           if (abortController.signal.aborted) return;
-          const data = rawEvent
-            .split('\n')
-            .filter((line) => line.startsWith('data:'))
-            .map((line) => line.slice(5).trim())
-            .join('');
-          if (!data) return;
-          const payload = JSON.parse(data) as RespondPayload;
-          if (payload.type === 'chunk' && typeof payload.text === 'string') {
-            completeAssistantReply += payload.text;
-            queueSpeechChunk(payload.text);
-          }
-          if (payload.type === 'done') streamDone = true;
-          if (payload.type === 'done' && Array.isArray(payload.actionsExecuted)) {
-            setActionsExecuted(payload.actionsExecuted as SreAction[]);
-          }
-        };
 
-        while (!streamDone) {
-          if (abortController.signal.aborted) {
+          metrics.markLlmReady();
+          setLatestMetrics(metrics.markSpeakTriggered());
+
+          const speechText = data.speech?.trim() || '';
+          if (speechText) {
+            setAssistantReply(speechText);
+            onBotSpeechRef.current?.(speechText);
+
+            // Speak out loud through user speakers via Web Speech API
+            playAudibleSpeech(speechText);
+
+            // Forward to Agora TTS audio playback
+            void fetch('/api/bot/speak', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: speechText, priority: 'high', channel }),
+              signal: abortController.signal,
+            }).catch((err) => console.warn('[EchoOps] Bot speak error:', err));
+
+            // Persist AI response turn into PostgreSQL database
+            void fetch('/api/ai/analyze-incident', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                channelName: channel || 'echoops-war-room',
+                speakerName: 'EchoOps AI',
+                transcript: speechText,
+              }),
+            }).catch((err) => console.warn('AI turn persistence note:', err));
+          }
+
+          // Immediately merge state delta into live incident context
+          if (data.stateDelta && typeof data.stateDelta === 'object') {
+            onStateDeltaRef.current?.(data.stateDelta);
+          }
+        }
+        // Case 2: SSE streaming response
+        else if (respondResponse.body) {
+          const reader = respondResponse.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let streamDone = false;
+          let fullSpeech = '';
+
+          const handleEvent = (rawEvent: string) => {
+            if (abortController.signal.aborted) return;
+            const dataStr = rawEvent
+              .split('\n')
+              .filter((line) => line.startsWith('data:'))
+              .map((line) => line.slice(5).trim())
+              .join('');
+            if (!dataStr) return;
+
             try {
-              await reader.cancel();
-            } catch {}
-            break;
-          }
-          const { done, value } = await reader.read();
-          if (abortController.signal.aborted) {
-            try {
-              await reader.cancel();
-            } catch {}
-            break;
-          }
-          buffer += decoder.decode(value, { stream: !done });
-          const events = buffer.split('\n\n');
-          buffer = events.pop() ?? '';
-          events.forEach(handleEvent);
-          if (done) break;
-        }
-        if (!abortController.signal.aborted && buffer.trim()) {
-          handleEvent(buffer);
-        }
-        await queuedSpeech;
+              const payload = JSON.parse(dataStr) as RespondPayload;
 
-        // Persist AI response turn into database
-        if (completeAssistantReply.trim() && !abortController.signal.aborted) {
-          void fetch('/api/ai/analyze-incident', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              channelName: channel || 'echoops-war-room',
-              speakerName: 'EchoOps AI',
-              transcript: completeAssistantReply.trim(),
-            }),
-          }).catch((err) => console.warn('AI turn persistence note:', err));
-        }
+              if (payload.type === 'chunk' && typeof payload.text === 'string') {
+                fullSpeech += payload.text;
+                setAssistantReply(fullSpeech);
+              }
 
-        if (!receivedChunk && !abortController.signal.aborted) {
-          throw new Error('The SRE copilot returned no speech content.');
+              if (payload.type === 'delta' && payload.stateDelta) {
+                onStateDeltaRef.current?.(payload.stateDelta as IncidentStateDelta);
+              }
+
+              if (payload.type === 'done') {
+                streamDone = true;
+                if (Array.isArray(payload.actionsExecuted)) {
+                  setActionsExecuted(payload.actionsExecuted as SreAction[]);
+                }
+              }
+            } catch {}
+          };
+
+          while (!streamDone) {
+            if (abortController.signal.aborted) {
+              try { await reader.cancel(); } catch {}
+              break;
+            }
+            const { done, value } = await reader.read();
+            if (done || abortController.signal.aborted) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const events = buffer.split('\n\n');
+            buffer = events.pop() ?? '';
+            events.forEach(handleEvent);
+          }
+
+          if (fullSpeech.trim()) {
+            onBotSpeechRef.current?.(fullSpeech.trim());
+            playAudibleSpeech(fullSpeech.trim());
+            void fetch('/api/bot/speak', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: fullSpeech.trim(), priority: 'high', channel }),
+              signal: abortController.signal,
+            }).catch((err) => console.warn('[EchoOps] Bot speak error:', err));
+
+            void fetch('/api/ai/analyze-incident', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                channelName: channel || 'echoops-war-room',
+                speakerName: 'EchoOps AI',
+                transcript: fullSpeech.trim(),
+              }),
+            }).catch((err) => console.warn('AI turn persistence note:', err));
+          }
         }
       } catch (error) {
         if (abortController.signal.aborted) return;
-        console.error('SRE copilot speech processing failed:', error);
+        console.error('[EchoOps] AI copilot speech processing failed:', error);
         setSpeechError(
           error instanceof Error ? error.message : 'Speech processing failed.',
         );
       } finally {
-        if (abortControllerRef.current === abortController) {
-          abortControllerRef.current = null;
+        if (!abortController.signal.aborted) {
+          isProcessingRef.current = false;
+          setIsProcessing(false);
         }
-        isProcessingRef.current = false;
-        setIsProcessing(false);
       }
     },
     [channel],

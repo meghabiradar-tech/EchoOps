@@ -3,7 +3,7 @@ import type { IncidentState } from '@/types/incident';
 import { updateIncidentState, getOrCreateIncident } from '@/lib/incidentStore';
 import { persistIncidentToDb } from '@/lib/db/models';
 import { wsHub } from '@/lib/wsHub';
-import { sendSlackIncidentAlert, sendSlackActionItem, sendSlackConflictAlert } from '@/lib/integrations/slack';
+import { sendSlackActionItem, sendSlackConflictAlert } from '@/lib/integrations/slack';
 import { createJiraTicketFromAction } from '@/lib/integrations/jira';
 
 export const dynamic = 'force-dynamic';

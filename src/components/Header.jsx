@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Radio, Mic, Users, ShieldAlert, Activity } from 'lucide-react';
+'use client';
 
-export default function Header() {
+import React, { useState, useEffect } from 'react';
+import { Radio, Mic, Users, Activity } from 'lucide-react';
+import { useIncidentContext } from '../context/IncidentContext';
+
+export default function Header({ rightSlot } = {}) {
+  const { warRoomId, respondersCount, incident } = useIncidentContext();
   const [elapsedSeconds, setElapsedSeconds] = useState(862); // 14m 22s initial
 
   useEffect(() => {
@@ -28,9 +32,9 @@ export default function Header() {
           <div className="brand-titles">
             <div className="brand-name-row">
               <span className="brand-name">EchoOps</span>
-              <span className="brand-version-badge">WAR ROOM #042</span>
+              <span className="brand-version-badge">{warRoomId}</span>
             </div>
-            <span className="brand-subtitle">Voice AI Incident Commander</span>
+            <span className="brand-subtitle">{incident.commander || 'Voice AI Incident Commander'}</span>
           </div>
         </div>
 
@@ -52,7 +56,7 @@ export default function Header() {
           {/* Responders Count */}
           <div className="voice-channel-badge" title="Active responders on audio bridge">
             <Users size={14} />
-            <span><strong>4</strong> Responders Connected</span>
+            <span><strong>{respondersCount}</strong> Responders Connected</span>
           </div>
 
           {/* War Room Duration */}
@@ -64,8 +68,10 @@ export default function Header() {
           {/* LIVE Status Indicator */}
           <div className="live-status-pill" id="live-indicator">
             <span className="pulse-dot"></span>
-            <span>LIVE</span>
+            <span>{incident.status || 'LIVE'}</span>
           </div>
+
+          {rightSlot}
         </div>
       </div>
     </header>

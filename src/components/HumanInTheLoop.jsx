@@ -1,20 +1,30 @@
-import React, { useState } from 'react';
-import { UserCheck, ShieldAlert, Check, RefreshCw, AlertCircle } from 'lucide-react';
+'use client';
 
-export default function HumanInTheLoop({ hitlData }) {
-  const [isConfirmed, setIsConfirmed] = useState(false);
-  const [confirmedTime, setConfirmedTime] = useState(null);
+import React from 'react';
+import { UserCheck, Check, RefreshCw, AlertCircle } from 'lucide-react';
+import { useIncidentContext } from '../context/IncidentContext';
+
+export default function HumanInTheLoop(props) {
+  const context = useIncidentContext();
+  const hitlData = props?.hitlData || context?.pendingAction || context?.humanInTheLoop || {};
+  const isConfirmed = hitlData.isConfirmed || false;
+  const confirmedTime = hitlData.confirmedTime || null;
+
+  const actionTitle = hitlData.actionTitle || 'Restart Payment Service Pods';
+  const subtitle = hitlData.subtitle || hitlData.actionSub || 'Rolling restart across payment-service-prod cluster';
+  const impactAssessment = hitlData.impactAssessment || hitlData.consequence || 'Will drop active in-flight checkout connections for 4-7 seconds during pod rotation.';
+  const target = hitlData.target || hitlData.targetCluster || 'k8s-prod-useast1';
 
   const handleConfirm = () => {
-    const now = new Date();
-    const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setIsConfirmed(true);
-    setConfirmedTime(timeString);
+    if (context?.confirmPendingAction) {
+      context.confirmPendingAction();
+    }
   };
 
   const handleReset = () => {
-    setIsConfirmed(false);
-    setConfirmedTime(null);
+    if (context?.resetPendingAction) {
+      context.resetPendingAction();
+    }
   };
 
   return (
@@ -29,23 +39,23 @@ export default function HumanInTheLoop({ hitlData }) {
 
       <div className="hitl-body">
         <div className="hitl-action-box">
-          <h3 className="hitl-action-title">{hitlData.actionTitle}</h3>
-          <p className="hitl-action-sub">{hitlData.actionSub}</p>
-          <p className="hitl-consequence-text">
-            <strong>Impact Assessment:</strong> {hitlData.consequence}
+          <h3 className="hitl-action-title" id="hitl-action-title">{actionTitle}</h3>
+          <p className="hitl-action-sub" id="hitl-action-sub">{subtitle}</p>
+          <p className="hitl-consequence-text" id="hitl-consequence">
+            <strong>Impact Assessment:</strong> {impactAssessment}
           </p>
         </div>
 
         <div className="hitl-footer-action-row">
           <div className="hitl-approval-meta">
             <AlertCircle size={14} className="text-amber-500" />
-            <span>Target: <code className="font-mono text-dim">{hitlData.targetCluster}</code></span>
+            <span>Target: <code className="font-mono text-dim" id="hitl-target-cluster">{target}</code></span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             {isConfirmed ? (
               <>
-                <button className="btn-action-confirmed" disabled>
+                <button className="btn-action-confirmed" disabled id="action-confirmed-badge">
                   <Check size={18} strokeWidth={3} />
                   ✓ Action Confirmed
                 </button>
@@ -53,6 +63,7 @@ export default function HumanInTheLoop({ hitlData }) {
                   className="btn-reset-demo"
                   onClick={handleReset}
                   title="Reset state for demo pitch"
+                  id="reset-hitl-button"
                 >
                   <RefreshCw size={12} style={{ display: 'inline', marginRight: '4px' }} />
                   Reset Demo
@@ -72,6 +83,7 @@ export default function HumanInTheLoop({ hitlData }) {
 
         {isConfirmed && (
           <div
+            id="hitl-confirmed-banner"
             style={{
               marginTop: '0.85rem',
               padding: '0.5rem 0.75rem',
@@ -86,7 +98,7 @@ export default function HumanInTheLoop({ hitlData }) {
             }}
           >
             <span>
-              ✓ Dispatched pod reboot command to Kubernetes ingress controller.
+              ✓ Dispatched command &ldquo;{actionTitle}&rdquo; to {target}.
             </span>
             <span className="font-mono" style={{ fontWeight: '700' }}>
               Authorized at {confirmedTime}

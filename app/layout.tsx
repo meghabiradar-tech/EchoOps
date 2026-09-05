@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import '@/src/index.css';
 import '@/src/App.css';
+import { IncidentProvider } from '@/src/context/IncidentContext';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -42,7 +43,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full">
-      <body className="h-full min-h-screen">{children}</body>
+      <body className="h-full min-h-screen">
+        <IncidentProvider>{children}</IncidentProvider>
+      </body>
     </html>
   );
 }

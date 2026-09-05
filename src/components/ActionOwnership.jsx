@@ -1,23 +1,23 @@
-import React, { useState } from 'react';
-import { CheckSquare, User, Clock, ArrowRight } from 'lucide-react';
+'use client';
 
-export default function ActionOwnership({ initialActions }) {
-  const [actions, setActions] = useState(initialActions);
+import React from 'react';
+import { CheckSquare } from 'lucide-react';
+import { useIncidentContext } from '../context/IncidentContext';
+
+export default function ActionOwnership(props) {
+  const context = useIncidentContext();
+  const actions = props?.actions || props?.initialActions || context?.actions || [];
 
   // Cycle status on click: PENDING -> IN PROGRESS -> COMPLETED -> PENDING
-  const cycleStatus = (id) => {
-    setActions((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          let nextStatus = 'IN PROGRESS';
-          if (item.status === 'PENDING') nextStatus = 'IN PROGRESS';
-          else if (item.status === 'IN PROGRESS') nextStatus = 'COMPLETED';
-          else if (item.status === 'COMPLETED') nextStatus = 'PENDING';
-          return { ...item, status: nextStatus };
-        }
-        return item;
-      })
-    );
+  const handleCycleStatus = (id, currentStatus) => {
+    let nextStatus = 'IN PROGRESS';
+    if (currentStatus === 'PENDING') nextStatus = 'IN PROGRESS';
+    else if (currentStatus === 'IN PROGRESS') nextStatus = 'COMPLETED';
+    else if (currentStatus === 'COMPLETED') nextStatus = 'PENDING';
+
+    if (context?.updateActionStatus) {
+      context.updateActionStatus(id, nextStatus);
+    }
   };
 
   const getStatusClass = (status) => {
@@ -41,7 +41,7 @@ export default function ActionOwnership({ initialActions }) {
           </div>
           <h2 className="card-title">Action & Ownership</h2>
         </div>
-        <span className="card-badge-count">{actions.length} Assigned Items</span>
+        <span className="card-badge-count" id="actions-count">{actions.length} Assigned Items</span>
       </div>
 
       <div className="card-body">
@@ -51,26 +51,30 @@ export default function ActionOwnership({ initialActions }) {
               {/* Action Description & Owner */}
               <div className="action-main-info">
                 <h3 className="action-title-text">{act.action}</h3>
-                
+
                 <div className="action-owner-tag">
                   <div
                     className="owner-avatar"
-                    style={{ backgroundColor: act.owner.bg, color: act.owner.color }}
-                    title={act.owner.role}
+                    style={{
+                      backgroundColor: act.owner?.bg || '#eef2ff',
+                      color: act.owner?.color || '#4f46e5',
+                    }}
+                    title={act.owner?.role || 'Responder'}
                   >
-                    {act.owner.initials}
+                    {act.owner?.initials || 'EO'}
                   </div>
-                  <span className="owner-name">{act.owner.name}</span>
-                  <span className="owner-role">• {act.owner.role}</span>
+                  <span className="owner-name">{act.owner?.name || 'EchoOps Commander'}</span>
+                  <span className="owner-role">• {act.owner?.role || 'SRE Engine'}</span>
                 </div>
               </div>
 
-              {/* Status Pill Badge (Clickable to demo interactive status changes) */}
+              {/* Status Pill Badge (Clickable to toggle status) */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
                 <span
                   className={`status-pill ${getStatusClass(act.status)}`}
-                  onClick={() => cycleStatus(act.id)}
-                  title="Click to toggle status (Demo Feature)"
+                  onClick={() => handleCycleStatus(act.id, act.status)}
+                  title="Click to toggle status"
+                  id={`action-status-pill-${act.id}`}
                 >
                   {act.status}
                 </span>
