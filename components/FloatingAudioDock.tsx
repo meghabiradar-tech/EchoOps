@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { IMicrophoneAudioTrack } from 'agora-rtc-react';
 import { MicrophoneSelector } from './MicrophoneSelector';
 import { Button } from '@/components/ui/button';
@@ -35,53 +36,104 @@ export function FloatingAudioDock({
   channelName,
 }: FloatingAudioDockProps) {
   const [showConfirmLeave, setShowConfirmLeave] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const isConnected = connectionState === 'CONNECTED';
   const isReconnecting = connectionState === 'RECONNECTING' || connectionState === 'CONNECTING';
 
-  return (
+  const dockContent = (
     <nav
       aria-label="Floating Audio Control Dock"
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-2xl border border-border/80 bg-background/85 px-4 py-2.5 shadow-2xl backdrop-blur-xl transition-all duration-300"
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 rounded-2xl border border-slate-700/50 bg-slate-900/80 px-4 py-2.5 shadow-2xl backdrop-blur-md transition-all duration-300"
     >
-      {/* Voice Activity Halo Indicator */}
-      <div className="relative flex items-center justify-center pr-2 border-r border-border/60">
+      {/* AI Commander Avatar & Voice Wave Activity Indicator */}
+      <div className="relative flex items-center gap-2.5 pr-2.5 border-r border-slate-700/60">
         <div
-          className={`h-4 w-4 rounded-full transition-all duration-300 flex items-center justify-center ${
-            isVadActive
-              ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]'
-              : isBotSpeaking
-              ? 'bg-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.8)] animate-pulse'
-              : isConnected
-              ? 'bg-emerald-500/60'
-              : isReconnecting
-              ? 'bg-amber-500 animate-pulse'
-              : 'bg-rose-500'
+          className={`relative h-9 w-9 rounded-xl flex items-center justify-center transition-all duration-300 ${
+            isBotSpeaking
+              ? 'bg-purple-600/30 border border-purple-500/60 shadow-[0_0_16px_rgba(168,85,247,0.5)]'
+              : 'bg-slate-800/80 border border-slate-700/60 text-slate-300'
           }`}
-          title={
-            isVadActive
-              ? 'Speaking (Voice Activity Detected)'
-              : isBotSpeaking
-              ? 'EchoOps AI Commander is speaking'
-              : `Bridge: ${connectionState}`
-          }
+          title={isBotSpeaking ? 'AI Commander is speaking' : 'AI Incident Commander'}
         >
-          {isVadActive && (
-            <span className="absolute inline-flex h-6 w-6 animate-ping rounded-full bg-emerald-400 opacity-60" />
-          )}
+          {/* Pure SVG Bot Avatar */}
+          <svg
+            className={`h-5 w-5 ${isBotSpeaking ? 'text-purple-300' : 'text-slate-300'}`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 8V4H8" />
+            <rect width="16" height="12" x="4" y="8" rx="2" />
+            <path d="M2 14h2" />
+            <path d="M20 14h2" />
+            <path d="M15 13v2" />
+            <path d="M9 13v2" />
+          </svg>
           {isBotSpeaking && (
-            <span className="absolute inline-flex h-6 w-6 animate-ping rounded-full bg-purple-400 opacity-60" />
+            <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-purple-500" />
+            </span>
           )}
         </div>
-        <div className="ml-2 hidden sm:flex flex-col text-[10px] leading-tight">
-          <span className="font-semibold uppercase tracking-wider text-muted-foreground">Bridge</span>
+
+        {/* Voice Wave Activity Indicator next to AI Avatar */}
+        <div
+          className="flex items-center gap-1 h-5 px-1"
+          title={
+            isBotSpeaking
+              ? 'AI Commander Speaking'
+              : isVadActive
+              ? 'Responder Speaking'
+              : 'Voice Bridge Listening'
+          }
+          aria-label="Voice wave activity indicator"
+        >
           <span
-            className={`font-mono font-medium ${
-              isConnected
-                ? 'text-emerald-400'
-                : isReconnecting
-                ? 'text-amber-400'
-                : 'text-rose-400'
+            className={`w-1 rounded-full transition-all duration-150 ${
+              isBotSpeaking
+                ? 'bg-purple-400 animate-[waveAnimation_0.8s_ease-in-out_infinite] h-5'
+                : isVadActive
+                ? 'bg-emerald-400 animate-[waveAnimation_0.8s_ease-in-out_infinite] h-4'
+                : 'bg-slate-600 h-1.5'
+            }`}
+          />
+          <span
+            className={`w-1 rounded-full transition-all duration-150 ${
+              isBotSpeaking
+                ? 'bg-purple-400 animate-[waveAnimation_0.8s_ease-in-out_0.2s_infinite] h-4'
+                : isVadActive
+                ? 'bg-emerald-400 animate-[waveAnimation_0.8s_ease-in-out_0.2s_infinite] h-5'
+                : 'bg-slate-600 h-2'
+            }`}
+          />
+          <span
+            className={`w-1 rounded-full transition-all duration-150 ${
+              isBotSpeaking
+                ? 'bg-purple-400 animate-[waveAnimation_0.8s_ease-in-out_0.4s_infinite] h-5'
+                : isVadActive
+                ? 'bg-emerald-400 animate-[waveAnimation_0.8s_ease-in-out_0.4s_infinite] h-3'
+                : 'bg-slate-600 h-1'
+            }`}
+          />
+        </div>
+
+        <div className="hidden lg:flex flex-col text-[10px] leading-tight">
+          <span className="font-mono font-bold text-slate-200">
+            {isBotSpeaking ? 'AI Speaking' : isVadActive ? 'User Speaking' : 'Listening'}
+          </span>
+          <span
+            className={`font-mono text-[9px] ${
+              isConnected ? 'text-emerald-400' : isReconnecting ? 'text-amber-400' : 'text-rose-400'
             }`}
           >
             {connectionState}
@@ -226,23 +278,23 @@ export function FloatingAudioDock({
         </button>
       )}
 
-      {/* Leave Bridge Button with Confirmation Popover */}
-      <div className="relative pl-1 border-l border-border/60">
+      {/* End Call Button with High-Contrast Red & Confirmation Popover */}
+      <div className="relative pl-1 border-l border-slate-700/60">
         {!showConfirmLeave ? (
           <button
             type="button"
             onClick={() => setShowConfirmLeave(true)}
             disabled={isEnding}
-            aria-label="Leave Voice Bridge"
-            title="Leave Voice Bridge"
-            className="flex h-10 items-center gap-2 rounded-xl bg-rose-600/90 hover:bg-rose-600 px-3.5 text-xs font-semibold text-white shadow-md transition-all duration-200 active:scale-95"
+            aria-label="End Call"
+            title="End Call & Disconnect Voice Bridge"
+            className="flex h-10 items-center gap-2 rounded-xl bg-red-600 hover:bg-red-500 active:bg-red-700 px-3.5 text-xs font-bold text-white shadow-lg shadow-red-600/30 border border-red-500/40 transition-all duration-200 active:scale-95"
           >
             <svg
               className="h-4 w-4"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2"
+              strokeWidth="2.2"
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
@@ -250,15 +302,15 @@ export function FloatingAudioDock({
               <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91" />
               <line x1="23" x2="1" y1="1" y2="23" />
             </svg>
-            <span className="hidden sm:inline">Leave</span>
+            <span className="hidden sm:inline">End Call</span>
           </button>
         ) : (
           <div
             role="alertdialog"
             aria-label="Confirm Leaving Bridge"
-            className="absolute bottom-12 right-0 flex flex-col gap-2 rounded-xl border border-destructive/50 bg-card p-3 shadow-2xl w-60 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200"
+            className="absolute bottom-12 right-0 flex flex-col gap-2 rounded-xl border border-red-500/50 bg-slate-900 p-3 shadow-2xl w-60 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200"
           >
-            <div className="flex items-center gap-2 text-xs font-semibold text-destructive">
+            <div className="flex items-center gap-2 text-xs font-bold text-red-400">
               <svg
                 className="h-4 w-4 shrink-0"
                 viewBox="0 0 24 24"
@@ -271,16 +323,16 @@ export function FloatingAudioDock({
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-              <span>Leave {channelName || 'Voice Bridge'}?</span>
+              <span>End Call for #{channelName || 'room'}?</span>
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[11px] text-slate-400">
               You will disconnect from audio and live agent telemetry.
             </p>
             <div className="flex items-center gap-2 pt-1">
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 flex-1 text-xs"
+                className="h-7 flex-1 text-xs text-slate-300 hover:text-white hover:bg-slate-800"
                 onClick={() => setShowConfirmLeave(false)}
               >
                 Cancel
@@ -288,14 +340,14 @@ export function FloatingAudioDock({
               <Button
                 variant="destructive"
                 size="sm"
-                className="h-7 flex-1 text-xs"
+                className="h-7 flex-1 text-xs bg-red-600 hover:bg-red-500 text-white font-bold"
                 onClick={() => {
                   setShowConfirmLeave(false);
                   onEndConversation();
                 }}
                 disabled={isEnding}
               >
-                {isEnding ? 'Leaving...' : 'Confirm'}
+                {isEnding ? 'Ending...' : 'Confirm'}
               </Button>
             </div>
           </div>
@@ -303,4 +355,10 @@ export function FloatingAudioDock({
       </div>
     </nav>
   );
+
+  if (mounted && typeof document !== 'undefined') {
+    return createPortal(dockContent, document.body);
+  }
+
+  return dockContent;
 }

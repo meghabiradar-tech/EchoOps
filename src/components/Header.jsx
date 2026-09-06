@@ -5,13 +5,14 @@ import {
   Radio,
   Users,
   Clock,
-  Layers,
   LayoutDashboard,
   Terminal,
-  Columns2,
+  History,
   ExternalLink,
   PhoneOff,
   Bot,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useIncidentContext } from '../context/IncidentContext';
 
@@ -31,6 +32,7 @@ export default function Header({
     propChannelName || incident?.channelName || incident?.channel || 'echoops-war-room-042';
 
   const [elapsedSeconds, setElapsedSeconds] = useState(876); // 14m 36s initial
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -42,19 +44,37 @@ export default function Header({
   const formatTimer = (totalSecs) => {
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
-    return `${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
+    return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
+
+  const handleCopyChannel = (e) => {
+    e.stopPropagation();
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(channelName);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } catch {
+      // Fallback
+    }
+  };
+
+  // Determine active view mode label
+  const isCockpitActive = viewMode === 'dashboard' || viewMode === 'cockpit';
+  const isConsoleActive = viewMode === 'console';
+  const isTimelineActive = viewMode === 'timeline';
 
   return (
     <header className="dashboard-header" role="banner">
       <div className="header-inner">
         {/* ========================================================
-            1. LEFT ZONE: Identity & Incident Scope
+            1. LEFT COLUMN: Identity & Dynamic War Room Tag
             ======================================================== */}
         <div className="header-zone-left">
           <div className="header-brand-group">
             <div className="brand-icon-wrapper" title="EchoOps Autonomous Voice SRE">
-              <Radio size={20} strokeWidth={2.4} />
+              <Radio size={18} strokeWidth={2.4} />
             </div>
             <div className="brand-text-col">
               <div className="brand-title-row">
@@ -70,26 +90,49 @@ export default function Header({
             </div>
           </div>
 
-          {/* Current War Room Channel Pill */}
-          <div
-            className="header-channel-pill"
-            title={`Current War Room Channel: #${channelName}`}
+          {/* Dynamic War Room Tag with 1-Click Copy */}
+          <button
+            type="button"
+            onClick={handleCopyChannel}
+            className="header-channel-pill group"
+            title={`Click to copy channel: #${channelName}`}
             id="header-channel-scope"
           >
             <span className="header-channel-hash">#</span>
             <span className="header-channel-name">{channelName}</span>
-          </div>
+            <span className="header-copy-icon">
+              {copied ? (
+                <Check size={12} className="text-emerald-400" />
+              ) : (
+                <Copy size={12} className="text-slate-400 group-hover:text-slate-200 transition-colors" />
+              )}
+            </span>
+            {copied && <span className="copy-tooltip">Copied!</span>}
+          </button>
         </div>
 
         {/* ========================================================
-            2. CENTER ZONE: Operational Telemetry
+            2. CENTER COLUMN: Clustered Status Pill
             ======================================================== */}
         <div className="header-zone-center">
           <div className="telemetry-pill-container" title="Operational Telemetry & Audio Engine">
-            {/* Connection pulse & Responders */}
+            {/* Live Incident Duration Clock */}
+            <div
+              className="telemetry-item font-mono"
+              title="Time elapsed since incident declaration"
+            >
+              <Clock size={13} className="text-amber-400" />
+              <span className="telemetry-text">
+                ⏱ <strong className="font-mono tracking-tight">{formatTimer(elapsedSeconds)}</strong>
+              </span>
+            </div>
+
+            <div className="telemetry-divider" />
+
+            {/* Active Headcount Indicator */}
             <div className="telemetry-item" title="Active responders currently on the bridge">
               <span className="pulse-green-dot" />
-              <Users size={13} className="text-slate-500" />
+              <Users size={13} className="text-emerald-400" />
               <span className="telemetry-text">
                 <strong>{respondersCount}</strong> Responders
               </span>
@@ -97,72 +140,47 @@ export default function Header({
 
             <div className="telemetry-divider" />
 
-            {/* Incident Duration Timer */}
-            <div
-              className="telemetry-item font-mono"
-              title="Time elapsed since incident declaration"
-            >
-              <Clock size={13} className="text-amber-500" />
-              <span className="telemetry-text">
-                ⏱ <strong>{formatTimer(elapsedSeconds)}</strong>
-              </span>
-            </div>
-
-            <div className="telemetry-divider" />
-
-            {/* AI Voice Activity Waveform */}
-            <div className="telemetry-item" title="AI Voice Commander synthesis stream ready">
+            {/* Pure CSS Audio Equalizer (4 vertical bars) */}
+            <div className="telemetry-item" title="AI Voice Commander synthesis & audio stream ready">
               <div className="mini-equalizer-bars" aria-hidden="true">
                 <span className="eq-bar eq-1" />
                 <span className="eq-bar eq-2" />
                 <span className="eq-bar eq-3" />
                 <span className="eq-bar eq-4" />
-                <span className="eq-bar eq-5" />
               </div>
-              <span className="telemetry-text font-semibold text-indigo-700">
-                Commander Active
+              <span className="telemetry-text font-semibold text-indigo-400">
+                Voice Ready
               </span>
             </div>
           </div>
         </div>
 
         {/* ========================================================
-            3. RIGHT ZONE: Navigation & Action
+            3. RIGHT COLUMN: View Switcher & Single Primary War Room Button
             ======================================================== */}
         <div className="header-zone-right">
-          {/* Secondary Action: Single clean link to All Incident Rooms */}
-          <a
-            href="/rooms"
-            className="header-rooms-link"
-            id="header-nav-rooms"
-            title="Browse all incident rooms and conversation histories"
-          >
-            <Layers size={13} className="text-slate-500" />
-            <span>Rooms & History</span>
-          </a>
-
-          {/* Segmented Tab Control: Dashboard | SRE Console | Split View */}
+          {/* View Switcher: Cockpit | SRE Console | Timeline */}
           {onSelectViewMode ? (
             <div className="header-segmented-tabs" role="tablist" aria-label="Dashboard View Modes">
               <button
                 type="button"
                 role="tab"
-                aria-selected={viewMode === 'dashboard'}
+                aria-selected={isCockpitActive}
                 onClick={() => onSelectViewMode('dashboard')}
-                className={`segment-btn ${viewMode === 'dashboard' ? 'active' : ''}`}
-                id="tab-view-dashboard"
-                title="Incident Overview Dashboard"
+                className={`segment-btn ${isCockpitActive ? 'active' : ''}`}
+                id="tab-view-cockpit"
+                title="Incident Cockpit Overview"
               >
                 <LayoutDashboard size={13} />
-                <span>Dashboard</span>
+                <span>Cockpit</span>
               </button>
 
               <button
                 type="button"
                 role="tab"
-                aria-selected={viewMode === 'console'}
+                aria-selected={isConsoleActive}
                 onClick={() => onSelectViewMode('console')}
-                className={`segment-btn ${viewMode === 'console' ? 'active' : ''}`}
+                className={`segment-btn ${isConsoleActive ? 'active' : ''}`}
                 id="tab-view-console"
                 title="SRE Voice Console & Runbooks"
               >
@@ -174,19 +192,19 @@ export default function Header({
               <button
                 type="button"
                 role="tab"
-                aria-selected={viewMode === 'split'}
-                onClick={() => onSelectViewMode('split')}
-                className={`segment-btn ${viewMode === 'split' ? 'active' : ''}`}
-                id="tab-view-split"
-                title="Side-by-side Split View"
+                aria-selected={isTimelineActive}
+                onClick={() => onSelectViewMode('timeline')}
+                className={`segment-btn ${isTimelineActive ? 'active' : ''}`}
+                id="tab-view-timeline"
+                title="Incident Timeline & Events"
               >
-                <Columns2 size={13} />
-                <span>Split View</span>
+                <History size={13} />
+                <span>Timeline</span>
               </button>
             </div>
           ) : null}
 
-          {/* The Single Primary War Room Action Button */}
+          {/* Single Primary "Open War Room" Button */}
           {!showConversation ? (
             <a
               href={`/room/${encodeURIComponent(channelName)}`}
@@ -196,8 +214,8 @@ export default function Header({
               id="header-primary-join-war-room"
               title="Open Dedicated Voice War Room in a New Tab"
             >
-              <Radio size={14} className="animate-pulse" />
-              <span>Join War Room</span>
+              <Radio size={14} className="animate-pulse text-white" />
+              <span>Open War Room</span>
               <ExternalLink size={13} className="opacity-80" />
             </a>
           ) : (

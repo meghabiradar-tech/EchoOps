@@ -59,7 +59,7 @@ const AgoraProvider = dynamic(
   { ssr: false },
 );
 
-type ViewMode = 'dashboard' | 'console' | 'split';
+type ViewMode = 'dashboard' | 'cockpit' | 'console' | 'timeline' | 'split';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -276,9 +276,9 @@ export default function LandingPage() {
           alignItems: 'center',
           gap: '5px',
           padding: '6px 12px',
-          background: '#ffffff',
-          color: '#475569',
-          border: '1px solid #e2e8f0',
+          background: '#151d30',
+          color: '#cbd5e1',
+          border: '1px solid #1e293b',
           borderRadius: '8px',
           fontSize: '0.75rem',
           fontWeight: 600,
@@ -286,25 +286,23 @@ export default function LandingPage() {
           transition: 'all 0.15s ease',
         }}
       >
-        <Radio size={13} className="text-indigo-600" />
+        <Radio size={13} className="text-indigo-400" />
         <span>Rooms & History</span>
       </Link>
-
-      {/* Segmented View Mode Tabs */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          background: '#f1f5f9',
-          borderRadius: '9px',
+          background: '#0d1322',
           padding: '3px',
-          border: '1px solid #e2e8f0',
+          borderRadius: '9px',
+          border: '1px solid #1e293b',
           gap: '2px',
         }}
       >
         <button
           onClick={() => setViewMode('dashboard')}
-          title="Incident Overview Dashboard"
+          title="Incident Cockpit Overview"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -315,14 +313,14 @@ export default function LandingPage() {
             borderRadius: '7px',
             border: 'none',
             cursor: 'pointer',
-            background: viewMode === 'dashboard' ? '#ffffff' : 'transparent',
-            color: viewMode === 'dashboard' ? '#4f46e5' : '#64748b',
-            boxShadow: viewMode === 'dashboard' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            background: (viewMode === 'dashboard' || viewMode === 'cockpit') ? '#1e293b' : 'transparent',
+            color: (viewMode === 'dashboard' || viewMode === 'cockpit') ? '#f8fafc' : '#94a3b8',
+            boxShadow: (viewMode === 'dashboard' || viewMode === 'cockpit') ? '0 1px 3px rgba(0,0,0,0.3)' : 'none',
             transition: 'all 0.15s ease',
           }}
         >
           <LayoutDashboard size={13} />
-          <span>Dashboard</span>
+          <span>Cockpit</span>
         </button>
 
         <button
@@ -338,9 +336,9 @@ export default function LandingPage() {
             borderRadius: '7px',
             border: 'none',
             cursor: 'pointer',
-            background: viewMode === 'console' ? '#ffffff' : 'transparent',
-            color: viewMode === 'console' ? '#4f46e5' : '#64748b',
-            boxShadow: viewMode === 'console' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            background: viewMode === 'console' ? '#1e293b' : 'transparent',
+            color: viewMode === 'console' ? '#f8fafc' : '#94a3b8',
+            boxShadow: viewMode === 'console' ? '0 1px 3px rgba(0,0,0,0.3)' : 'none',
             transition: 'all 0.15s ease',
           }}
         >
@@ -360,8 +358,8 @@ export default function LandingPage() {
         </button>
 
         <button
-          onClick={() => setViewMode('split')}
-          title="Side-by-side Split View"
+          onClick={() => setViewMode('timeline')}
+          title="Incident Timeline & Events"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -372,14 +370,14 @@ export default function LandingPage() {
             borderRadius: '7px',
             border: 'none',
             cursor: 'pointer',
-            background: viewMode === 'split' ? '#ffffff' : 'transparent',
-            color: viewMode === 'split' ? '#4f46e5' : '#64748b',
-            boxShadow: viewMode === 'split' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            background: viewMode === 'timeline' ? '#1e293b' : 'transparent',
+            color: viewMode === 'timeline' ? '#f8fafc' : '#94a3b8',
+            boxShadow: viewMode === 'timeline' ? '0 1px 3px rgba(0,0,0,0.3)' : 'none',
             transition: 'all 0.15s ease',
           }}
         >
           <Columns2 size={13} />
-          <span>Split View</span>
+          <span>Timeline</span>
         </button>
       </div>
 
@@ -393,20 +391,20 @@ export default function LandingPage() {
             display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
-            padding: '7px 15px',
-            background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+            padding: '6px 14px',
+            background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
             color: '#ffffff',
             borderRadius: '9999px',
             fontSize: '0.775rem',
             fontWeight: 700,
-            border: 'none',
+            border: '1px solid rgba(255,255,255,0.15)',
             cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+            boxShadow: '0 0 16px rgba(79, 70, 229, 0.4)',
             transition: 'all 0.15s ease',
           }}
         >
           <Radio size={14} className="animate-pulse" />
-          <span>Join War Room</span>
+          <span>Open War Room</span>
           <ExternalLink size={13} className="opacity-80" />
         </button>
       ) : (
@@ -416,10 +414,10 @@ export default function LandingPage() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '5px',
-              padding: '5px 11px',
-              background: '#ecfdf5',
-              color: '#059669',
-              border: '1px solid #a7f3d0',
+              padding: '4px 10px',
+              background: 'rgba(16, 185, 129, 0.15)',
+              color: '#34d399',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
               borderRadius: '9999px',
               fontSize: '0.75rem',
               fontWeight: 700,
@@ -442,10 +440,10 @@ export default function LandingPage() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '5px',
-              padding: '5px 11px',
-              background: '#fef2f2',
-              color: '#dc2626',
-              border: '1px solid #fecaca',
+              padding: '4px 10px',
+              background: 'rgba(239, 68, 68, 0.15)',
+              color: '#f87171',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
               borderRadius: '9999px',
               fontSize: '0.75rem',
               fontWeight: 600,
@@ -481,9 +479,9 @@ export default function LandingPage() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      {/* 1. DASHBOARD VIEW (Default: Streamlined Incident Dashboard Cockpit) */}
-      {viewMode === 'dashboard' && (
+    <div style={{ minHeight: '100vh', background: '#090d16', color: '#f8fafc' }}>
+      {/* 1. DASHBOARD / COCKPIT / TIMELINE VIEW */}
+      {(viewMode === 'dashboard' || viewMode === 'cockpit' || viewMode === 'timeline') && (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <IncidentDashboard
             viewMode={viewMode}
@@ -510,8 +508,8 @@ export default function LandingPage() {
           <div
             style={{
               padding: '0.75rem 1.5rem',
-              background: '#ffffff',
-              borderBottom: '1px solid #e2e8f0',
+              background: '#0d1322',
+              borderBottom: '1px solid #1e293b',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -525,27 +523,28 @@ export default function LandingPage() {
                   alignItems: 'center',
                   gap: '6px',
                   padding: '5px 12px',
-                  background: '#f1f5f9',
-                  border: '1px solid #cbd5e1',
+                  background: '#151d30',
+                  border: '1px solid #1e293b',
                   borderRadius: '7px',
                   fontSize: '0.75rem',
                   fontWeight: 600,
-                  color: '#334155',
+                  color: '#cbd5e1',
                   cursor: 'pointer',
                 }}
               >
-                ← Back to Incident Dashboard
+                ← Back to Cockpit
               </button>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Terminal size={16} className="text-indigo-600" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
+                <Terminal size={16} className="text-indigo-400" />
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc' }}>
                   EchoOps SRE War Room Console
                 </span>
                 <span
                   style={{
                     fontSize: '0.7rem',
-                    background: '#e0e7ff',
-                    color: '#4338ca',
+                    background: 'rgba(99, 102, 241, 0.15)',
+                    color: '#a5b4fc',
+                    border: '1px solid rgba(99, 102, 241, 0.3)',
                     padding: '2px 8px',
                     borderRadius: '9999px',
                     fontWeight: 600,

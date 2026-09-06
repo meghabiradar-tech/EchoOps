@@ -4,8 +4,8 @@ export interface AppProps {
   voiceSlot?: ReactNode;
   liveTranscripts?: Array<{ speaker: string; time: string; text: string }>;
   headerRightSlot?: ReactNode;
-  viewMode?: 'dashboard' | 'console' | 'split';
-  onSelectViewMode?: (mode: 'dashboard' | 'console' | 'split') => void;
+  viewMode?: 'dashboard' | 'cockpit' | 'console' | 'timeline' | 'split';
+  onSelectViewMode?: (mode: 'dashboard' | 'cockpit' | 'console' | 'timeline' | 'split') => void;
   showConversation?: boolean;
   onEndConversation?: () => void | Promise<void>;
   isStopping?: boolean;

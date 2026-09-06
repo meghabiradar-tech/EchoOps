@@ -2,62 +2,62 @@
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
 
-  /* Theme Colors - Light Mode Polished */
-  --bg-app: #f8fafc;
-  --bg-subtle: #f1f5f9;
-  --bg-card: #ffffff;
-  --bg-card-hover: #fafafa;
-  --bg-elevated: #ffffff;
+  /* Theme Colors - Sleek Command Center Dark (#090d16 & #1e293b) */
+  --bg-app: #090d16;
+  --bg-subtle: #0d1322;
+  --bg-card: #0d1322;
+  --bg-card-hover: #121a2d;
+  --bg-elevated: #151d30;
 
-  --border-subtle: #e2e8f0;
-  --border-card: #e2e8f0;
+  --border-subtle: #1e293b;
+  --border-card: #1e293b;
   --border-focus: #6366f1;
 
-  --text-main: #0f172a;
-  --text-muted: #475569;
-  --text-dim: #94a3b8;
-  --text-inverse: #ffffff;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --text-inverse: #090d16;
 
   /* Brand / Primary */
-  --primary-hover: #4338ca;
-  --primary-light: #eef2ff;
-  --primary-border: #c7d2fe;
+  --primary-hover: #4f46e5;
+  --primary-light: rgba(99, 102, 241, 0.15);
+  --primary-border: rgba(99, 102, 241, 0.35);
 
   /* Severity / Danger */
-  --danger: #dc2626;
-  --danger-light: #fef2f2;
-  --danger-border: #fecaca;
-  --danger-text: #991b1b;
+  --danger: #ef4444;
+  --danger-light: rgba(239, 68, 68, 0.15);
+  --danger-border: rgba(239, 68, 68, 0.35);
+  --danger-text: #fca5a5;
 
   /* Warning / Assumptions / Amber */
-  --warning: #d97706;
-  --warning-light: #fffbeb;
-  --warning-border: #fde68a;
-  --warning-text: #92400e;
+  --warning: #f59e0b;
+  --warning-light: rgba(245, 158, 11, 0.15);
+  --warning-border: rgba(245, 158, 11, 0.35);
+  --warning-text: #fde68a;
 
   /* Success / Confirmed / Live */
-  --success: #059669;
-  --success-light: #ecfdf5;
-  --success-border: #a7f3d0;
-  --success-text: #065f46;
+  --success: #10b981;
+  --success-light: rgba(16, 185, 129, 0.15);
+  --success-border: rgba(16, 185, 129, 0.35);
+  --success-text: #6ee7b7;
 
   /* Info / In Progress */
-  --info: #0284c7;
-  --info-light: #f0f9ff;
-  --info-border: #bae6fd;
-  --info-text: #075985;
+  --info: #0ea5e9;
+  --info-light: rgba(14, 165, 233, 0.15);
+  --info-border: rgba(14, 165, 233, 0.35);
+  --info-text: #7dd3fc;
 
   /* Purple / AI */
-  --purple: #7c3aed;
-  --purple-light: #f5f3ff;
-  --purple-border: #ddd6fe;
-  --purple-text: #5b21b6;
+  --purple: #8b5cf6;
+  --purple-light: rgba(139, 92, 246, 0.15);
+  --purple-border: rgba(139, 92, 246, 0.35);
+  --purple-text: #c4b5fd;
 
   /* Shadow Elevation */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
-  --shadow-card-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
-  --shadow-elevated: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 4px 12px 0 rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 8px 24px 0 rgba(0, 0, 0, 0.45);
+  --shadow-elevated: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
 
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -67,7 +67,7 @@
 }
 
 .app-layout {
-  --primary: #4f46e5;
+  --primary: #6366f1;
 }
 
 * {
@@ -84,7 +84,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-image: radial-gradient(rgba(148, 163, 184, 0.15) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px);
   background-size: 24px 24px;
   background-position: -19px -19px;
 }
@@ -98,11 +98,11 @@ body {
   background: var(--bg-app);
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #1e293b;
   border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #334155;
 }
 
 /* Base Utility Classes */

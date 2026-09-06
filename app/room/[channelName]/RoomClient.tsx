@@ -280,79 +280,83 @@ export function RoomClient({ channelName }: RoomClientProps) {
   // Top header controls for War Room
   const warRoomHeaderControls = (
     <div className="flex items-center gap-2.5">
-      {/* View Mode Switcher */}
-      <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+      {/* View Mode Switcher: Cockpit | SRE Console | Split | Timeline */}
+      <div className="flex items-center bg-[#0d1322] p-1 rounded-lg border border-[#1e293b] gap-1">
         <button
           onClick={() => setViewMode('dashboard')}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
             viewMode === 'dashboard'
-              ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              ? 'bg-[#1e293b] text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
           }`}
           id="room-tab-dashboard"
+          title="Incident Cockpit Overview"
         >
-          <LayoutDashboard size={14} />
-          <span>Dashboard</span>
+          <LayoutDashboard size={13} />
+          <span>Cockpit</span>
         </button>
 
         <button
           onClick={() => setViewMode('console')}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
             viewMode === 'console'
-              ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              ? 'bg-[#1e293b] text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
           }`}
           id="room-tab-console"
+          title="SRE Voice Console & Runbooks"
         >
-          <Terminal size={14} />
-          <span>Voice Console</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <Terminal size={13} />
+          <span>SRE Console</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
         </button>
 
         <button
           onClick={() => setViewMode('split')}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
             viewMode === 'split'
-              ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              ? 'bg-[#1e293b] text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
           }`}
           id="room-tab-split"
+          title="Dual Split View"
         >
-          <Columns2 size={14} />
+          <Columns2 size={13} />
           <span>Split</span>
         </button>
+
+        <Link
+          href={`/room/${encodeURIComponent(cleanChannel)}/timeline`}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md text-slate-400 hover:text-slate-200 transition-colors"
+          id="room-tab-timeline"
+          title="Incident Timeline Drilldown"
+        >
+          <Layers size={13} />
+          <span>Timeline</span>
+        </Link>
       </div>
 
       {/* All Rooms & History Directory Link */}
       <Link
         href="/rooms"
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#151d30] text-slate-300 border border-[#1e293b] hover:bg-[#1e293b] hover:text-white transition-colors"
         id="room-all-rooms-header-btn"
         title="View All Incident Rooms & History"
       >
-        <Activity size={13} className="text-indigo-500" />
+        <Activity size={13} className="text-indigo-400" />
         <span className="hidden sm:inline">All Rooms</span>
       </Link>
 
-      {/* Timeline Drilldown Link */}
-      <Link
-        href={`/room/${encodeURIComponent(cleanChannel)}/timeline`}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors"
-        id="room-timeline-drilldown-header-btn"
-      >
-        <Layers size={13} />
-        <span>Timeline Drilldown</span>
-      </Link>
-
-      {/* Leave Room Button */}
+      {/* End Call Button (Styled in High-Contrast Red) */}
       <button
         onClick={handleEndConversation}
         disabled={isStopping}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900 hover:bg-red-100 transition-colors"
+        className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-500 text-white border border-red-500/40 shadow-sm transition-colors"
         id="leave-war-room-btn"
+        title="End Call and Disconnect Voice Bridge"
       >
         <PhoneOff size={13} />
-        <span>{isStopping ? 'Leaving...' : 'Leave Room'}</span>
+        <span>{isStopping ? 'Ending...' : 'End Call'}</span>
       </button>
     </div>
   );
@@ -413,31 +417,31 @@ export function RoomClient({ channelName }: RoomClientProps) {
           </div>
         )}
 
-        {/* Top Sub-Header */}
-        <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-3 flex items-center justify-between shrink-0 shadow-sm">
+        {/* Top Command Bar Header */}
+        <header className="border-b border-[#1e293b] bg-[#0d1322] px-6 py-2.5 flex items-center justify-between shrink-0 shadow-md">
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md"
+              className="text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 bg-[#151d30] border border-[#1e293b] px-2.5 py-1.5 rounded-md transition-colors"
             >
               <ArrowLeft size={13} />
               <span>Dashboard Home</span>
             </Link>
-            <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800" />
+            <div className="h-4 w-[1px] bg-[#1e293b]" />
             <div className="flex items-center gap-2">
-              <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <h1 className="text-sm font-bold tracking-tight text-slate-900 dark:text-white font-mono">
-                WAR ROOM: {cleanChannel}
+              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+              <h1 className="text-xs font-bold tracking-tight text-white font-mono">
+                WAR ROOM: #{cleanChannel}
               </h1>
               <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900 flex items-center gap-1"
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 flex items-center gap-1"
                 id="room-realtime-responders-badge"
                 title="Connected Responders synced in real-time via Supabase Presence"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>{realtimeRespondersCount} Connected</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span>{realtimeRespondersCount} Responders</span>
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-950/60 text-indigo-300 border border-indigo-800/60">
                 {isLocalVoiceMode ? 'LOCAL AI' : 'AGORA SD-RTN'}
               </span>
             </div>
