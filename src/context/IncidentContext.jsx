@@ -131,102 +131,115 @@ export function IncidentProvider({ children, initialChannel = 'echoops-war-room-
   useEffect(() => {
     const cleanChannel = (channelName || 'echoops-war-room-042').trim();
     const userUid = `user-${Math.floor(Math.random() * 90000) + 10000}`;
-    const realtimeChannel = supabase.channel(`incident-room-${cleanChannel}`, {
-      config: {
-        presence: { key: userUid },
-      },
-    });
+    const channelTopic = `incident-ctx-${cleanChannel}-${Math.random().toString(36).slice(2, 8)}`;
 
-    // Handle incoming incident updates (metrics, severity, status, summary, title)
-    const onIncidentUpdate = (payload) => {
-      if (!payload?.new) return;
-      const row = payload.new;
-      setIncident((prev) => ({
-        ...prev,
-        title: row.title || prev.title,
-        severity: row.severity || prev.severity,
-        status: row.status || prev.status,
-        summary: row.summary !== undefined ? (row.summary || '') : prev.summary,
-      }));
-      setImpactMetrics((prev) => ({
-        activeImpact: row.active_impact || prev.activeImpact,
-        estRevenueLoss: row.est_revenue_loss || prev.estRevenueLoss,
-        slaBreachIn: row.sla_breach_in || prev.slaBreachIn,
-        impactedTraffic: row.impacted_traffic || prev.impactedTraffic,
-        impactedCustomers: row.impacted_traffic || prev.impactedCustomers,
-      }));
-    };
+    let realtimeChannel = null;
+    try {
+      realtimeChannel = supabase.channel(channelTopic, {
+        config: {
+          presence: { key: userUid },
+        },
+      });
 
-    realtimeChannel
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'incidents', filter: `channel_name=eq.${cleanChannel}` },
-        onIncidentUpdate,
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'Incident', filter: `channel_name=eq.${cleanChannel}` },
-        onIncidentUpdate,
-      );
-
-    // Handle incoming live speech transcripts
-    const onTranscriptInsert = (payload) => {
-      if (!payload?.new) return;
-      const row = payload.new;
-      const newEntry = {
-        id: row.id || `tr-${Date.now()}`,
-        speaker: row.speaker,
-        text: row.text,
-        time: row.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      // Handle incoming incident updates (metrics, severity, status, summary, title)
+      const onIncidentUpdate = (payload) => {
+        if (!payload?.new) return;
+        const row = payload.new;
+        setIncident((prev) => ({
+          ...prev,
+          title: row.title || prev.title,
+          severity: row.severity || prev.severity,
+          status: row.status || prev.status,
+          summary: row.summary !== undefined ? (row.summary || '') : prev.summary,
+        }));
+        setImpactMetrics((prev) => ({
+          activeImpact: row.active_impact || prev.activeImpact,
+          estRevenueLoss: row.est_revenue_loss || prev.estRevenueLoss,
+          slaBreachIn: row.sla_breach_in || prev.slaBreachIn,
+          impactedTraffic: row.impacted_traffic || prev.impactedTraffic,
+          impactedCustomers: row.impacted_traffic || prev.impactedCustomers,
+        }));
       };
-      setTranscripts((prev) => {
-        if (prev.some((t) => t.id === newEntry.id || (t.text === newEntry.text && t.speaker === newEntry.speaker))) {
-          return prev;
-        }
-        return [...prev, newEntry].slice(-100);
-      });
-    };
 
-    realtimeChannel
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'transcripts', filter: `channel_name=eq.${cleanChannel}` },
-        onTranscriptInsert,
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'Transcript', filter: `channel_name=eq.${cleanChannel}` },
-        onTranscriptInsert,
-      );
+      realtimeChannel
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'incidents', filter: `channel_name=eq.${cleanChannel}` },
+          onIncidentUpdate,
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'Incident', filter: `channel_name=eq.${cleanChannel}` },
+          onIncidentUpdate,
+        );
 
-    // Dynamic presence tracking for connected responders
-    realtimeChannel
-      .on('presence', { event: 'sync' }, () => {
-        const state = realtimeChannel.presenceState();
-        let totalUsers = 0;
-        Object.keys(state).forEach((k) => {
-          if (Array.isArray(state[k])) totalUsers += state[k].length;
-        });
-        setRespondersCount(Math.max(1, totalUsers));
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          try {
-            await realtimeChannel.track({
-              user_id: userUid,
-              name: 'Incident Responder',
-              role: 'Operator',
-              online_at: new Date().toISOString(),
-            });
-          } catch (trackErr) {
-            console.warn('Presence track note:', trackErr);
+      // Handle incoming live speech transcripts
+      const onTranscriptInsert = (payload) => {
+        if (!payload?.new) return;
+        const row = payload.new;
+        const newEntry = {
+          id: row.id || `tr-${Date.now()}`,
+          speaker: row.speaker,
+          text: row.text,
+          time: row.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setTranscripts((prev) => {
+          if (prev.some((t) => t.id === newEntry.id || (t.text === newEntry.text && t.speaker === newEntry.speaker))) {
+            return prev;
           }
-        }
-      });
+          return [...prev, newEntry].slice(-100);
+        });
+      };
+
+      realtimeChannel
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'transcripts', filter: `channel_name=eq.${cleanChannel}` },
+          onTranscriptInsert,
+        )
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'Transcript', filter: `channel_name=eq.${cleanChannel}` },
+          onTranscriptInsert,
+        );
+
+      // Dynamic presence tracking for connected responders
+      realtimeChannel
+        .on('presence', { event: 'sync' }, () => {
+          try {
+            const state = realtimeChannel.presenceState();
+            let totalUsers = 0;
+            Object.keys(state).forEach((k) => {
+              if (Array.isArray(state[k])) totalUsers += state[k].length;
+            });
+            setRespondersCount(Math.max(1, totalUsers));
+          } catch {}
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            try {
+              await realtimeChannel.track({
+                user_id: userUid,
+                name: 'Incident Responder',
+                role: 'Operator',
+                online_at: new Date().toISOString(),
+              });
+            } catch (trackErr) {
+              console.warn('Presence track note:', trackErr);
+            }
+          }
+        });
+    } catch (channelErr) {
+      console.warn('[EchoOps] Supabase channel initialization note:', channelErr);
+    }
 
     return () => {
-      realtimeChannel.unsubscribe();
-      supabase.removeChannel(realtimeChannel);
+      if (realtimeChannel) {
+        try {
+          realtimeChannel.unsubscribe();
+          supabase.removeChannel(realtimeChannel);
+        } catch {}
+      }
     };
   }, [channelName]);
 

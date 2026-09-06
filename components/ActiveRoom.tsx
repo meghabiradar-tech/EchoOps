@@ -44,7 +44,7 @@ import { QuickstartTranscriptPanel } from './QuickstartTranscriptPanel';
 import { RunbookQuickActions } from './RunbookQuickActions';
 import { FloatingAudioDock } from './FloatingAudioDock';
 import type { ActiveRoomProps, ConversationComponentProps } from '@/types/conversation';
-import { useAiSpeechHandler, stopAudibleSpeech } from '@/hooks/useAiSpeechHandler';
+import { useAiSpeechHandler, stopAudibleSpeech, playAudibleSpeech } from '@/hooks/useAiSpeechHandler';
 import { useIncidentContext } from '@/src/context/IncidentContext';
 import {
   useSpeechCapture,
@@ -189,14 +189,38 @@ export function ActiveRoom({
     });
   }, [remoteUsers]);
 
-  // Single-source audio exclusivity: detect if Agora audio is actively connected
-  const isAgoraAudioActive = Boolean(joinSuccess && (isAgentConnected || remoteUsers.length > 0));
+  // Tracks granular RTC connection state for the status dot.
+  const [connectionState, setConnectionState] = useState<string>('CONNECTING');
+  const agentUID = String(DEFAULT_AGENT_UID);
+  const [joinedUID, setJoinedUID] = useState<UID>(0);
+  const [agoraTranscriptionAvailable, setAgoraTranscriptionAvailable] =
+    useState(false);
+  const [agoraSpeech, setAgoraSpeech] = useState<AgoraSpeechUpdate | null>(null);
+
+  // Transcript + agent state — managed with AgoraVoiceAI
+  const [rawTranscript, setRawTranscript] = useState<
+    TranscriptHelperItem<Partial<UserTranscription | AgentTranscription>>[]
+  >([]);
+
+  // Guardrail: detect when Agora agent is actively streaming audio through WebRTC
+  const isRemoteAgentAudioPlaying = useMemo(() => {
+    return remoteUsers.some(
+      (user) =>
+        user.uid.toString() === agentUID &&
+        user.hasAudio &&
+        Boolean((user.audioTrack as unknown as { isPlaying?: boolean })?.isPlaying),
+    );
+  }, [remoteUsers, agentUID]);
+
+  // Single-source audio exclusivity: only suppress browser speech synthesis if Agora RTC audio is ACTUALLY actively playing
+  const isAgoraAudioActive = isRemoteAgentAudioPlaying;
 
   const {
     processUserSpeech,
     assistantReply,
     speechError,
     isProcessing: isCopilotProcessing,
+    isSpeaking: isLocalSpeaking,
     latestMetrics,
     abortPendingSpeech,
   } = useAiSpeechHandler({
@@ -233,18 +257,50 @@ export function ActiveRoom({
     },
   });
 
-  // Tracks granular RTC connection state for the status dot.
-  const [connectionState, setConnectionState] = useState<string>('CONNECTING');
-  const agentUID = String(DEFAULT_AGENT_UID);
-  const [joinedUID, setJoinedUID] = useState<UID>(0);
-  const [agoraTranscriptionAvailable, setAgoraTranscriptionAvailable] =
-    useState(false);
-  const [agoraSpeech, setAgoraSpeech] = useState<AgoraSpeechUpdate | null>(null);
+  // Initial bot greeting when responder joins the incident war room
+  const hasGreetedRef = useRef(false);
+  useEffect(() => {
+    if (!isReady || hasGreetedRef.current) return;
+    hasGreetedRef.current = true;
 
-  // Transcript + agent state — managed with AgoraVoiceAI
-  const [rawTranscript, setRawTranscript] = useState<
-    TranscriptHelperItem<Partial<UserTranscription | AgentTranscription>>[]
-  >([]);
+    const timer = setTimeout(() => {
+      const greetingText =
+        'EchoOps Incident Commander active. I am monitoring the voice room and tracking verified incident state.';
+
+      incidentCtxRef.current?.addTranscript({
+        speaker: 'EchoOps AI Commander',
+        text: greetingText,
+      });
+
+      setRawTranscript((prev) => {
+        if (
+          prev.some((t) =>
+            (t.text || '').toLowerCase().includes('incident commander active'),
+          )
+        ) {
+          return prev;
+        }
+        return [
+          ...prev,
+          {
+            uid: agentUID,
+            text: greetingText,
+            status: TurnStatus.END,
+            turn_id: Date.now(),
+            _time: Date.now(),
+            stream_id: 0,
+            metadata: null,
+          },
+        ];
+      });
+
+      if (!isRemoteAgentAudioPlaying) {
+        playAudibleSpeech(greetingText);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [isReady, agentUID, isRemoteAgentAudioPlaying]);
 
   // Restore historical conversation turns for this incident channel
   useEffect(() => {
@@ -422,22 +478,12 @@ export function ActiveRoom({
     }
   }, [joinSuccess, client]);
 
-  // Guardrail: detect when bot is outputting audio
-  const isRemoteAgentAudioPlaying = useMemo(() => {
-    return remoteUsers.some(
-      (user) =>
-        user.uid.toString() === agentUID &&
-        user.hasAudio &&
-        Boolean((user.audioTrack as unknown as { isPlaying?: boolean })?.isPlaying),
-    );
-  }, [remoteUsers, agentUID]);
-
   const isBotSpeaking = useMemo(() => {
     return (
       !isInterrupted &&
-      (agentState === 'speaking' || isCopilotProcessing || isRemoteAgentAudioPlaying)
+      (agentState === 'speaking' || isCopilotProcessing || isRemoteAgentAudioPlaying || isLocalSpeaking)
     );
-  }, [agentState, isCopilotProcessing, isInterrupted, isRemoteAgentAudioPlaying]);
+  }, [agentState, isCopilotProcessing, isInterrupted, isRemoteAgentAudioPlaying, isLocalSpeaking]);
 
   const isBotSpeakingRef = useRef(isBotSpeaking);
   useEffect(() => {

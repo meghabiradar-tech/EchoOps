@@ -19,43 +19,136 @@ type RespondPayload = {
   actionsExecuted?: unknown;
 };
 
+let speechWatchdogInterval: ReturnType<typeof setInterval> | null = null;
+
 export function stopAudibleSpeech() {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   try {
+    if (speechWatchdogInterval) {
+      clearInterval(speechWatchdogInterval);
+      speechWatchdogInterval = null;
+    }
     window.speechSynthesis.cancel();
   } catch {}
 }
 
-export function playAudibleSpeech(text: string) {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+export function playAudibleSpeech(
+  text: string,
+  onStart?: () => void,
+  onEnd?: () => void,
+) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    onEnd?.();
+    return;
+  }
   try {
-    window.speechSynthesis.cancel();
+    stopAudibleSpeech();
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
     const clean = text.replace(/[*_#`]/g, '').trim();
-    if (!clean) return;
+    if (!clean) {
+      onEnd?.();
+      return;
+    }
+
     const utterance = new SpeechSynthesisUtterance(clean);
     utterance.rate = 1.05;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
-    const voices = window.speechSynthesis.getVoices();
-    const preferredVoice =
-      voices.find(
-        (v) =>
-          v.lang.startsWith('en') &&
-          (v.name.includes('Natural') ||
-            v.name.includes('Google') ||
-            v.name.includes('Samantha') ||
-            v.name.includes('Daniel') ||
-            v.name.includes('Alex')),
-      ) || voices.find((v) => v.lang.startsWith('en'));
+    let hasStarted = false;
+    let hasEnded = false;
 
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
+    const cleanup = () => {
+      if (speechWatchdogInterval) {
+        clearInterval(speechWatchdogInterval);
+        speechWatchdogInterval = null;
+      }
+      if (!hasEnded) {
+        hasEnded = true;
+        onEnd?.();
+      }
+    };
+
+    utterance.onstart = () => {
+      hasStarted = true;
+      onStart?.();
+
+      // Chrome speech synthesis watchdog to prevent pause bug on long utterances
+      if (speechWatchdogInterval) clearInterval(speechWatchdogInterval);
+      speechWatchdogInterval = setInterval(() => {
+        if (!window.speechSynthesis.speaking) {
+          cleanup();
+        } else if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+      }, 5000);
+    };
+
+    utterance.onend = () => {
+      cleanup();
+    };
+
+    utterance.onerror = (e) => {
+      if (e.error !== 'interrupted' && e.error !== 'canceled') {
+        console.warn('[EchoOps] Speech synthesis utterance error:', e.error);
+      }
+      cleanup();
+    };
+
+    const setVoiceAndSpeak = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const preferredVoice =
+        voices.find(
+          (v) =>
+            v.lang.startsWith('en') &&
+            (v.name.includes('Natural') ||
+              v.name.includes('Google') ||
+              v.name.includes('Samantha') ||
+              v.name.includes('Daniel') ||
+              v.name.includes('Alex') ||
+              v.name.includes('Karen')),
+        ) || voices.find((v) => v.lang.startsWith('en'));
+
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+
+      window.speechSynthesis.speak(utterance);
+
+      // Safety fallback: if utterance never fired onstart within 1s and isn't speaking
+      setTimeout(() => {
+        if (!hasStarted && !window.speechSynthesis.speaking) {
+          cleanup();
+        }
+      }, 1000);
+    };
+
+    const availableVoices = window.speechSynthesis.getVoices();
+    if (availableVoices.length > 0) {
+      setVoiceAndSpeak();
+    } else {
+      // Voices not loaded yet, wait for voiceschanged or timeout
+      let handled = false;
+      const onVoices = () => {
+        if (handled) return;
+        handled = true;
+        window.speechSynthesis.removeEventListener('voiceschanged', onVoices);
+        setVoiceAndSpeak();
+      };
+      window.speechSynthesis.addEventListener('voiceschanged', onVoices);
+      setTimeout(() => {
+        if (!handled) {
+          handled = true;
+          window.speechSynthesis.removeEventListener('voiceschanged', onVoices);
+          setVoiceAndSpeak();
+        }
+      }, 200);
     }
-
-    window.speechSynthesis.speak(utterance);
   } catch (err) {
     console.warn('[EchoOps] Browser speech synthesis error:', err);
+    onEnd?.();
   }
 }
 
@@ -75,6 +168,7 @@ export function useAiSpeechHandler({
   const [assistantReply, setAssistantReply] = useState<string | null>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [latestMetrics, setLatestMetrics] = useState<AiTurnMetrics | null>(null);
   const [actionsExecuted, setActionsExecuted] = useState<SreAction[]>([]);
   const isProcessingRef = useRef(false);
@@ -99,6 +193,7 @@ export function useAiSpeechHandler({
         abortControllerRef.current = null;
       }
       stopAudibleSpeech();
+      setIsSpeaking(false);
 
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
@@ -162,7 +257,11 @@ export function useAiSpeechHandler({
 
             // Single-source audio exclusivity: only use browser SpeechSynthesis if Agora RTC audio is not active
             if (!isAgoraAudioActiveRef.current) {
-              playAudibleSpeech(speechText);
+              playAudibleSpeech(
+                speechText,
+                () => setIsSpeaking(true),
+                () => setIsSpeaking(false),
+              );
             }
 
             // Forward to Agora TTS audio playback in channel
@@ -246,7 +345,11 @@ export function useAiSpeechHandler({
             onBotSpeechRef.current?.(fullSpeech.trim());
             // Single-source audio exclusivity: only use browser SpeechSynthesis if Agora RTC audio is not active
             if (!isAgoraAudioActiveRef.current) {
-              playAudibleSpeech(fullSpeech.trim());
+              playAudibleSpeech(
+                fullSpeech.trim(),
+                () => setIsSpeaking(true),
+                () => setIsSpeaking(false),
+              );
             }
             void fetch('/api/bot/speak', {
               method: 'POST',
@@ -284,6 +387,7 @@ export function useAiSpeechHandler({
 
   const abortPendingSpeech = useCallback(() => {
     stopAudibleSpeech();
+    setIsSpeaking(false);
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -297,6 +401,7 @@ export function useAiSpeechHandler({
     assistantReply,
     speechError,
     isProcessing,
+    isSpeaking,
     latestMetrics,
     actionsExecuted,
     abortPendingSpeech,

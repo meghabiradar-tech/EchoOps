@@ -80,149 +80,162 @@ export function useRealtimeIncident(channelName: string) {
   useEffect(() => {
     loadInitialData();
 
-    const realtimeChannelName = `incident-room-${cleanChannel}`;
-    const channel = supabase.channel(realtimeChannelName, {
-      config: {
-        presence: {
-          key: userUidRef.current,
+    const realtimeChannelName = `incident-presence-${cleanChannel}-${Math.random().toString(36).slice(2, 8)}`;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    try {
+      channel = supabase.channel(realtimeChannelName, {
+        config: {
+          presence: {
+            key: userUidRef.current,
+          },
         },
-      },
-    });
-
-    channelRef.current = channel;
-
-    // A. Listen for UPDATE events on Incident table
-    const handleIncidentUpdate = (payload: { new: IncidentRecord }) => {
-      if (!payload.new) return;
-      const row = payload.new;
-      setIncident((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          title: row.title || prev.title,
-          severity: (row.severity as IncidentSeverity) || prev.severity,
-          status: (row.status as IncidentStatus) || prev.status,
-          summary: row.summary !== undefined ? (row.summary || '') : prev.summary,
-        };
       });
 
-      // Update impact metrics if present in row
-      setImpactMetrics((prev) => ({
-        activeImpact: row.active_impact || prev.activeImpact,
-        estRevenueLoss: row.est_revenue_loss || prev.estRevenueLoss,
-        slaBreachIn: row.sla_breach_in || prev.slaBreachIn,
-        impactedTraffic: row.impacted_traffic || prev.impactedTraffic,
-      }));
-    };
+      channelRef.current = channel;
 
-    channel
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'incidents',
-          filter: `channel_name=eq.${cleanChannel}`,
-        },
-        handleIncidentUpdate,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'Incident',
-          filter: `channel_name=eq.${cleanChannel}`,
-        },
-        handleIncidentUpdate,
-      );
-
-    // B. Listen for INSERT events on Transcript table
-    const handleTranscriptInsert = (payload: { new: TranscriptRecord }) => {
-      if (!payload.new) return;
-      const row = payload.new;
-      const newEntry: StoredTranscriptEntry = {
-        id: row.id || `tr-${Date.now()}`,
-        channelName: row.channel_name || cleanChannel,
-        speaker: row.speaker,
-        text: row.text,
-        time:
-          row.time ||
-          new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-
-      setTranscripts((prev) => {
-        if (prev.some((t) => t.id === newEntry.id)) return prev;
-        return [...prev, newEntry].slice(-100);
-      });
-    };
-
-    channel
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'transcripts',
-          filter: `channel_name=eq.${cleanChannel}`,
-        },
-        handleTranscriptInsert,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'Transcript',
-          filter: `channel_name=eq.${cleanChannel}`,
-        },
-        handleTranscriptInsert,
-      );
-
-    // C. Supabase Presence Tracking for Connected Responders
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        const responders: PresenceUser[] = [];
-
-        Object.keys(state).forEach((key) => {
-          const presences = state[key];
-          if (Array.isArray(presences)) {
-            presences.forEach((p: unknown) => {
-              const user = p as { user_id?: string; name?: string; role?: string; online_at?: string };
-              responders.push({
-                userId: user.user_id || key,
-                name: user.name || 'Responder',
-                role: user.role || 'Incident Responder',
-                onlineAt: user.online_at || new Date().toISOString(),
-              });
-            });
-          }
+      // A. Listen for UPDATE events on Incident table
+      const handleIncidentUpdate = (payload: { new: IncidentRecord }) => {
+        if (!payload.new) return;
+        const row = payload.new;
+        setIncident((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            title: row.title || prev.title,
+            severity: (row.severity as IncidentSeverity) || prev.severity,
+            status: (row.status as IncidentStatus) || prev.status,
+            summary: row.summary !== undefined ? (row.summary || '') : prev.summary,
+          };
         });
 
-        // Minimum 1 responder (local user) if sync returns empty in demo/offline mode
-        setRespondersCount(Math.max(1, responders.length));
-        setPresenceUsers(responders);
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
+        // Update impact metrics if present in row
+        setImpactMetrics((prev) => ({
+          activeImpact: row.active_impact || prev.activeImpact,
+          estRevenueLoss: row.est_revenue_loss || prev.estRevenueLoss,
+          slaBreachIn: row.sla_breach_in || prev.slaBreachIn,
+          impactedTraffic: row.impacted_traffic || prev.impactedTraffic,
+        }));
+      };
+
+      channel
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'incidents',
+            filter: `channel_name=eq.${cleanChannel}`,
+          },
+          handleIncidentUpdate,
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'Incident',
+            filter: `channel_name=eq.${cleanChannel}`,
+          },
+          handleIncidentUpdate,
+        );
+
+      // B. Listen for INSERT events on Transcript table
+      const handleTranscriptInsert = (payload: { new: TranscriptRecord }) => {
+        if (!payload.new) return;
+        const row = payload.new;
+        const newEntry: StoredTranscriptEntry = {
+          id: row.id || `tr-${Date.now()}`,
+          channelName: row.channel_name || cleanChannel,
+          speaker: row.speaker,
+          text: row.text,
+          time:
+            row.time ||
+            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        setTranscripts((prev) => {
+          if (prev.some((t) => t.id === newEntry.id)) return prev;
+          return [...prev, newEntry].slice(-100);
+        });
+      };
+
+      channel
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'transcripts',
+            filter: `channel_name=eq.${cleanChannel}`,
+          },
+          handleTranscriptInsert,
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'Transcript',
+            filter: `channel_name=eq.${cleanChannel}`,
+          },
+          handleTranscriptInsert,
+        );
+
+      // C. Supabase Presence Tracking for Connected Responders
+      channel
+        .on('presence', { event: 'sync' }, () => {
           try {
-            await channel.track({
-              user_id: userUidRef.current,
-              name: 'Incident Responder',
-              role: 'Operator',
-              online_at: new Date().toISOString(),
+            if (!channel) return;
+            const state = channel.presenceState();
+            const responders: PresenceUser[] = [];
+
+            Object.keys(state).forEach((key) => {
+              const presences = state[key];
+              if (Array.isArray(presences)) {
+                presences.forEach((p: unknown) => {
+                  const user = p as { user_id?: string; name?: string; role?: string; online_at?: string };
+                  responders.push({
+                    userId: user.user_id || key,
+                    name: user.name || 'Responder',
+                    role: user.role || 'Incident Responder',
+                    onlineAt: user.online_at || new Date().toISOString(),
+                  });
+                });
+              }
             });
-          } catch (trackErr) {
-            console.warn('Presence track note:', trackErr);
+
+            // Minimum 1 responder (local user) if sync returns empty in demo/offline mode
+            setRespondersCount(Math.max(1, responders.length));
+            setPresenceUsers(responders);
+          } catch {}
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED' && channel) {
+            try {
+              await channel.track({
+                user_id: userUidRef.current,
+                name: 'Incident Responder',
+                role: 'Operator',
+                online_at: new Date().toISOString(),
+              });
+            } catch (trackErr) {
+              console.warn('Presence track note:', trackErr);
+            }
           }
-        }
-      });
+        });
+    } catch (channelErr) {
+      console.warn('[EchoOps] Supabase presence channel error:', channelErr);
+    }
 
     // Cleanup: Unsubscribe and remove channel on unmount
     return () => {
-      channel.unsubscribe();
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          channel.unsubscribe();
+          supabase.removeChannel(channel);
+        } catch {}
+      }
       channelRef.current = null;
     };
   }, [cleanChannel, loadInitialData]);

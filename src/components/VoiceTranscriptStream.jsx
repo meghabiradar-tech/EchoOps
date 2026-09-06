@@ -144,11 +144,11 @@ export default function VoiceTranscriptStream(props) {
 
         // 4. Speak response OUT LOUD via browser speech synthesis
         if (speech && !audioMuted) {
-          setIsBotSpeaking(true);
-          playAudibleSpeech(speech);
-          // Estimated duration based on words
-          const durationMs = Math.min(12000, Math.max(2500, speech.split(' ').length * 360));
-          setTimeout(() => setIsBotSpeaking(false), durationMs);
+          playAudibleSpeech(
+            speech,
+            () => setIsBotSpeaking(true),
+            () => setIsBotSpeaking(false),
+          );
         }
       } catch (err) {
         console.error('[EchoOps] Failed to process voice command:', err);
