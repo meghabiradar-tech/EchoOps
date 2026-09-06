@@ -20,10 +20,12 @@ types/               Shared TypeScript route/component contracts
 - `generate-agora-token/route.ts`: builds RTC+RTM token via `buildTokenWithRtm`.
 - `invite-agent/route.ts`: validates input/env, configures and starts agent session.
 - `stop-conversation/route.ts`: stops agent and handles idempotent already-stopping cases.
+- `rooms/route.ts`: queries and manages incident rooms with conversation history persistence.
 - `chat/completions/route.ts`: optional OpenAI-compatible SSE proxy for custom LLM path.
 
 ## Client Ownership (`components`)
 
+- `IncidentRoomsDirectory.tsx`: incident room catalog, search, live metrics, conversation history expansion, and 1-click rejoining.
 - `LandingPage.tsx`: pre-call shell, token/invite/RTM bootstrap, conversation mount/unmount.
 - `ConversationComponent.tsx`: RTC join, mic publish, toolkit init, transcript/metrics/issues state.
 - `QuickstartConversationLayout.tsx`: in-call framing and slots.

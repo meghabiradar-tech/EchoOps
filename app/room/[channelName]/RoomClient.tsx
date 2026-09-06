@@ -321,6 +321,17 @@ export function RoomClient({ channelName }: RoomClientProps) {
         </button>
       </div>
 
+      {/* All Rooms & History Directory Link */}
+      <Link
+        href="/rooms"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+        id="room-all-rooms-header-btn"
+        title="View All Incident Rooms & History"
+      >
+        <Activity size={13} className="text-indigo-500" />
+        <span className="hidden sm:inline">All Rooms</span>
+      </Link>
+
       {/* Timeline Drilldown Link */}
       <Link
         href={`/room/${encodeURIComponent(cleanChannel)}/timeline`}

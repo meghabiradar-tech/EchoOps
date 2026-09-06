@@ -59,7 +59,10 @@ The sections below (Start Here, Patterns, Anti-Patterns, etc.) remain the canoni
 - `app/api/generate-agora-token/route.ts`: issues RTC + RTM tokens for the browser user.
 - `app/api/invite-agent/route.ts`: starts the managed agent session; edit here for system prompt, VAD, model, or voice changes.
 - `app/api/stop-conversation/route.ts`: stops the agent session.
+- `app/api/rooms/route.ts`: queries and filters incident rooms catalog with persistent conversation history.
 - `app/api/chat/completions/route.ts`: optional OpenAI-compatible SSE proxy for a custom LLM (not wired by default).
+- `app/rooms/page.tsx`: directory page to view, search, export, and rejoin incident war rooms.
+- `components/IncidentRoomsDirectory.tsx`: full incident rooms catalog, metrics, and conversation history inspector.
 - `components/LandingPage.tsx`: session bootstrap, RTM setup, provider wiring, and conversation lifecycle.
 - `components/ConversationComponent.tsx`: RTC join, mic publication, `AgoraVoiceAI` init, transcript state, and renewals.
 - `components/QuickstartConversationLayout.tsx`: in-call header, transcript rail, and controls dock.

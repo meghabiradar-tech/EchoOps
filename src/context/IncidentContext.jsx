@@ -99,6 +99,20 @@ export function IncidentProvider({ children, initialChannel = 'echoops-war-room-
             text: t.text,
             time: t.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           })));
+        } else if (typeof window !== 'undefined') {
+          try {
+            const localSaved = window.localStorage.getItem(`echoops_room_transcripts_${clean}`);
+            if (localSaved) {
+              const parsed = JSON.parse(localSaved);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setTranscripts(parsed.map((p) => ({
+                  speaker: p.speaker || (String(p.uid) === '0' ? 'You (Human Operator)' : 'EchoOps AI Commander'),
+                  text: p.text,
+                  time: p.createdAt ? new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
+                })));
+              }
+            }
+          } catch {}
         }
       }
     } catch (err) {
@@ -125,6 +139,16 @@ export function IncidentProvider({ children, initialChannel = 'echoops-war-room-
     setTranscripts((prev) => [...prev, newEntry].slice(-50));
     try {
       broadcastRef.current?.postMessage({ type: 'ADD_TRANSCRIPT', payload: newEntry });
+    } catch {}
+
+    // Persist to localStorage for offline / multi-room continuity
+    try {
+      if (typeof window !== 'undefined') {
+        const localKey = `echoops_room_transcripts_${channelName}`;
+        const prevSaved = JSON.parse(window.localStorage.getItem(localKey) || '[]');
+        const updated = [...prevSaved, { ...newEntry, createdAt: Date.now() }].slice(-100);
+        window.localStorage.setItem(localKey, JSON.stringify(updated));
+      }
     } catch {}
 
     // Persist to backend database

@@ -352,3 +352,7 @@ export function archiveIncident(channelName: string, pir: PostIncidentReview): I
 export function getAllArchivedIncidents(): IncidentState[] {
   return archivedIncidents;
 }
+
+export function getAllActiveIncidents(): IncidentState[] {
+  return Array.from(activeIncidents.values());
+}

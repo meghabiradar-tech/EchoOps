@@ -245,6 +245,78 @@ export function ActiveRoom({
   const [rawTranscript, setRawTranscript] = useState<
     TranscriptHelperItem<Partial<UserTranscription | AgentTranscription>>[]
   >([]);
+
+  // Restore historical conversation turns for this incident channel
+  useEffect(() => {
+    const channel = agoraData.channel;
+    if (!channel || typeof window === 'undefined') return;
+
+    // 1. Instant recovery from local cache
+    try {
+      const localSaved = window.localStorage.getItem(`echoops_room_transcripts_${channel}`);
+      if (localSaved) {
+        const parsed = JSON.parse(localSaved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRawTranscript((prev) => {
+            if (prev.length > 0) return prev;
+            return parsed.map((item, idx) => ({
+              uid: item.uid || (item.speaker?.includes('AI') ? agentUID : '0'),
+              text: item.text,
+              status: TurnStatus.END,
+              turn_id: item.id || `hist-${idx}`,
+              _time: item.createdAt || Date.now() - (parsed.length - idx) * 60000,
+              stream_id: 0,
+              metadata: null,
+            }));
+          });
+        }
+      }
+    } catch {}
+
+    // 2. Fetch from backend API /api/room/[channel]
+    fetch(`/api/room/${encodeURIComponent(channel)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.transcripts) && data.transcripts.length > 0) {
+          setRawTranscript((prev) => {
+            const existingTexts = new Set(prev.map((t) => (t.text || '').trim().toLowerCase()));
+            const historicalTurns: TranscriptHelperItem<Partial<UserTranscription | AgentTranscription>>[] = data.transcripts
+              .filter((t: { text?: string }) => t.text && !existingTexts.has(t.text.trim().toLowerCase()))
+              .map((t: { speaker?: string; text: string; id?: string; createdAt?: string }, idx: number) => ({
+                uid: t.speaker && (t.speaker.includes('AI') || t.speaker.includes('Commander')) ? agentUID : '0',
+                text: t.text,
+                status: TurnStatus.END,
+                turn_id: t.id || `hist-${idx}`,
+                _time: t.createdAt ? new Date(t.createdAt).getTime() : Date.now() - (data.transcripts.length - idx) * 60000,
+                stream_id: 0,
+                metadata: null,
+              }));
+
+            const combined = [...historicalTurns, ...prev];
+            try {
+              window.localStorage.setItem(
+                `echoops_room_transcripts_${channel}`,
+                JSON.stringify(combined.map((t) => ({ uid: t.uid, text: t.text, createdAt: t._time }))),
+              );
+            } catch {}
+            return combined;
+          });
+        }
+      })
+      .catch((err) => console.warn('[EchoOps] Historical transcript load note:', err));
+  }, [agoraData.channel, agentUID]);
+
+  // Persist conversation turns to localStorage for this room
+  useEffect(() => {
+    const channel = agoraData.channel;
+    if (!channel || rawTranscript.length === 0 || typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(
+        `echoops_room_transcripts_${channel}`,
+        JSON.stringify(rawTranscript.map((t) => ({ uid: t.uid, text: t.text, createdAt: t._time }))),
+      );
+    } catch {}
+  }, [rawTranscript, agoraData.channel]);
   const [agentState, setAgentState] = useState<AgentState | null>(null);
   const [agentMetrics, setAgentMetrics] = useState<QuickstartAgentMetric[]>([]);
   const [connectionIssues, setConnectionIssues] = useState<ConnectionIssue[]>(

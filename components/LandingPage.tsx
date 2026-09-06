@@ -2,6 +2,7 @@
 
 import { useState, useRef, Suspense, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { RTMClient } from 'agora-rtm';
 import {
@@ -545,6 +546,27 @@ export default function LandingPage() {
                 <span>Join Voice Room</span>
                 <ExternalLink size={13} className="opacity-80" />
               </button>
+
+              <Link
+                href="/rooms"
+                id="banner-all-rooms"
+                title="Browse All Incident Rooms and Conversation History"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '7px 14px',
+                  background: '#f8fafc',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                <span>All Rooms & History</span>
+              </Link>
 
               <button
                 onClick={handleOpenDedicatedRoom}

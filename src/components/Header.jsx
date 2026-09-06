@@ -65,6 +65,30 @@ export default function Header({ rightSlot } = {}) {
             <span>Duration: <strong>{formatTimer(elapsedSeconds)}</strong></span>
           </div>
 
+          {/* Incident Rooms & History Directory */}
+          <a
+            href="/rooms"
+            className="header-rooms-directory-btn"
+            id="header-rooms-directory-btn"
+            title="View All Incident Rooms & Conversation History"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              background: '#ffffff',
+              color: '#4f46e5',
+              border: '1px solid #c7d2fe',
+              borderRadius: '8px',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              textDecoration: 'none',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <span>Incident Rooms & History</span>
+          </a>
+
           {/* Join War Room in New Tab */}
           <a
             href={`/room/${encodeURIComponent(incident?.channel || 'echoops-war-room-042')}`}

@@ -9,6 +9,8 @@ import {
   getOrCreateIncident,
   updateIncidentState,
   searchSemanticMemory,
+  getAllActiveIncidents,
+  getAllArchivedIncidents,
 } from '@/lib/incidentStore';
 
 export async function persistIncidentToDb(incident: IncidentState): Promise<boolean> {
@@ -434,4 +436,150 @@ export async function loadIncidentRoomData(channelName: string): Promise<RoomHyd
     transcripts,
   };
 }
+
+export type IncidentRoomSummary = {
+  channelName: string;
+  incident: IncidentState;
+  transcripts: StoredTranscriptEntry[];
+  transcriptsCount: number;
+  lastTurn: StoredTranscriptEntry | null;
+};
+
+const DEFAULT_ROOM_SEEDS = [
+  {
+    channel: 'echoops-war-room-042',
+    scenario: 'tech_outage' as IncidentState['scenario'],
+    title: 'Core API Elevated Latency & Database Saturation',
+    severity: 'Sev-1' as IncidentState['severity'],
+    status: 'investigating' as IncidentState['status'],
+    transcripts: [
+      { speaker: 'System', text: 'Incident opened: Core API Elevated Latency & Database Saturation (Sev-1)', time: '08:14 PM' },
+      { speaker: 'Monisha (Lead)', text: 'War Room established. API latency alert fired for checkout cluster.', time: '08:15 PM' },
+      { speaker: 'EchoOps AI Commander', text: 'EchoOps Incident Commander active. I am monitoring the voice room and tracking verified incident state.', time: '08:15 PM' },
+      { speaker: 'You (Human Operator)', text: 'Database connection pool is exhausted on postgres-primary. We need to rollback to v2.4.0 immediately.', time: '08:16 PM' },
+      { speaker: 'EchoOps AI Commander', text: 'PostgreSQL connection pool exhausted at 100/100 locked connections. Recommended action staged: Drain pool and recycle worker threads.', time: '08:17 PM' },
+      { speaker: 'Alex (SRE)', text: 'Confirmed. 14 worker processes holding locks on order checkout queries.', time: '08:18 PM' },
+      { speaker: 'EchoOps AI Commander', text: 'Pending Human-in-the-loop authorization to execute connection pool drain on postgres-primary.', time: '08:19 PM' },
+    ],
+  },
+  {
+    channel: 'incident-prod-checkout-402',
+    scenario: 'payment_outage' as IncidentState['scenario'],
+    title: 'Payment Gateway Outage - 504 Timeout Spike',
+    severity: 'Sev-1' as IncidentState['severity'],
+    status: 'investigating' as IncidentState['status'],
+    transcripts: [
+      { speaker: 'System', text: 'Incident opened: Payment Gateway Outage - 504 Timeout Spike (Sev-1)', time: '07:30 PM' },
+      { speaker: 'Alex (SRE)', text: 'Checkout failure rate spiked to 78 percent with 504 gateway timeouts.', time: '07:31 PM' },
+      { speaker: 'EchoOps AI Commander', text: 'Anomaly detected in Stripe webhook listener. Downstream timeouts cascading to API gateway.', time: '07:32 PM' },
+      { speaker: 'You (Human Operator)', text: 'Enable circuit breaker and route transactions through secondary gateway Adyen.', time: '07:33 PM' },
+      { speaker: 'EchoOps AI Commander', text: 'Circuit breaker triggered. Routing 100% checkout traffic to Adyen backup processor. Failure rate dropped to 2.4%.', time: '07:35 PM' },
+    ],
+  },
+  {
+    channel: 'incident-db-deadlock-109',
+    scenario: 'tech_outage' as IncidentState['scenario'],
+    title: 'PostgreSQL Deadlock Cascade & Connection Starvation',
+    severity: 'Sev-1' as IncidentState['severity'],
+    status: 'monitoring' as IncidentState['status'],
+    transcripts: [
+      { speaker: 'System', text: 'Incident opened: PostgreSQL Deadlock Cascade (Sev-1)', time: '06:10 PM' },
+      { speaker: 'Jordan (Ops)', text: 'Deadlocks detected on order_line_items table during inventory sync.', time: '06:12 PM' },
+      { speaker: 'EchoOps AI Commander', text: 'Deadlock graph indicates circular wait between PID 4821 and PID 4839. Recommending cancel query on PID 4821.', time: '06:13 PM' },
+      { speaker: 'You (Human Operator)', text: 'Authorize query cancellation on PID 4821.', time: '06:14 PM' },
+      { speaker: 'EchoOps AI Commander', text: 'Query cancelled. Deadlock resolved. Worker queue backlog clearing.', time: '06:15 PM' },
+    ],
+  },
+  {
+    channel: 'incident-auth-latency-88',
+    scenario: 'tech_outage' as IncidentState['scenario'],
+    title: 'OAuth Token Refresh Cache Exhaustion',
+    severity: 'Sev-2' as IncidentState['severity'],
+    status: 'resolved' as IncidentState['status'],
+    transcripts: [
+      { speaker: 'System', text: 'Incident opened: OAuth Token Refresh Cache Exhaustion (Sev-2)', time: '04:00 PM' },
+      { speaker: 'Monisha (Lead)', text: 'User logins failing intermittently across mobile clients.', time: '04:02 PM' },
+      { speaker: 'EchoOps AI Commander', text: 'Redis auth cache hit ratio dropped below 45%. Eviction rate peaking.', time: '04:03 PM' },
+      { speaker: 'Alex (SRE)', text: 'Scaling Redis cache cluster to 6 shards.', time: '04:15 PM' },
+      { speaker: 'EchoOps AI Commander', text: 'Cache cluster scaled. Hit ratio restored to 99.4%. Incident resolved.', time: '04:30 PM' },
+    ],
+  },
+  {
+    channel: 'incident-k8s-pod-crash-501',
+    scenario: 'tech_outage' as IncidentState['scenario'],
+    title: 'Payment Worker Pod OOMKilled Crash Loop',
+    severity: 'Sev-2' as IncidentState['severity'],
+    status: 'monitoring' as IncidentState['status'],
+    transcripts: [
+      { speaker: 'System', text: 'Incident opened: Payment Worker Pod Crash Loop (Sev-2)', time: '02:15 PM' },
+      { speaker: 'Jordan (Ops)', text: 'Payment worker pods restarting every 3 minutes in us-east-1.', time: '02:16 PM' },
+      { speaker: 'EchoOps AI Commander', text: 'Pod logs show OOMKilled: memory limit 512Mi exceeded during batch receipt generation.', time: '02:17 PM' },
+      { speaker: 'You (Human Operator)', text: 'Patch deployment to increase worker memory limits to 2Gi.', time: '02:20 PM' },
+      { speaker: 'EchoOps AI Commander', text: 'Deployment patched and rolled out to 12 replicas. Memory stabilized at 720Mi.', time: '02:25 PM' },
+    ],
+  },
+];
+
+let isSeeded = false;
+function initDefaultSeeds() {
+  if (isSeeded) return;
+  isSeeded = true;
+
+  for (const seed of DEFAULT_ROOM_SEEDS) {
+    const inc = getOrCreateIncident(seed.channel, seed.scenario);
+    inc.title = seed.title;
+    inc.severity = seed.severity;
+    inc.status = seed.status;
+
+    if (!channelTranscriptsMemory.has(seed.channel)) {
+      const turns: StoredTranscriptEntry[] = seed.transcripts.map((t, idx) => ({
+        id: `tr-${seed.channel}-${idx + 1}`,
+        channelName: seed.channel,
+        speaker: t.speaker,
+        text: t.text,
+        time: t.time,
+      }));
+      channelTranscriptsMemory.set(seed.channel, turns);
+    }
+  }
+}
+
+export async function getAllIncidentRooms(): Promise<IncidentRoomSummary[]> {
+  initDefaultSeeds();
+
+  const active = getAllActiveIncidents();
+  const archived = getAllArchivedIncidents();
+  const allIncidents = [...active, ...archived];
+
+  // Also scan all channels stored in memory
+  const allChannels = new Set<string>();
+  allIncidents.forEach((inc) => allChannels.add(inc.channelName));
+  for (const ch of channelTranscriptsMemory.keys()) {
+    allChannels.add(ch);
+  }
+
+  const summaries: IncidentRoomSummary[] = [];
+
+  for (const ch of allChannels) {
+    const inc = getOrCreateIncident(ch);
+    const transcripts = await loadHistoricalTranscripts(ch);
+    const lastTurn = transcripts.length > 0 ? transcripts[transcripts.length - 1] : null;
+
+    summaries.push({
+      channelName: ch,
+      incident: inc,
+      transcripts,
+      transcriptsCount: transcripts.length,
+      lastTurn,
+    });
+  }
+
+  // Sort with most active / recent first
+  return summaries.sort((a, b) => {
+    if (a.incident.status === 'investigating' && b.incident.status !== 'investigating') return -1;
+    if (b.incident.status === 'investigating' && a.incident.status !== 'investigating') return 1;
+    return b.transcriptsCount - a.transcriptsCount;
+  });
+}
+
 
