@@ -51,10 +51,10 @@ export default function Home() {
               setLiveFacts(
                 inc.facts.map((f: any, i: number) => ({
                   id: f.id || `f-${i}`,
-                  text: f.statement,
-                  time: f.timestamp ? new Date(f.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
-                  source: f.verifiedBy || 'EchoOps AI',
-                  verified: true,
+                  fact: f.fact || f.statement || f.text,
+                  timestamp: f.timestamp || f.time || '10:33 AM',
+                  verifiedBy: f.verifiedBy || 'Postgres APM / Sarah J.',
+                  confidence: 'Confirmed',
                 })),
               );
             }
@@ -62,10 +62,12 @@ export default function Home() {
               setLiveTimeline(
                 inc.timeline.map((t: any, i: number) => ({
                   id: t.id || `t-${i}`,
-                  time: t.time || '10:00 AM',
-                  type: t.category === 'fact' ? 'fact' : t.category === 'action' ? 'action' : 'decision',
-                  speaker: t.speaker || 'System',
-                  content: t.note,
+                  time: t.time || '10:31 AM',
+                  title: t.title || t.note || 'System Event',
+                  description: t.description || t.note || 'Event details registered on voice bridge.',
+                  source: t.source || t.speaker || 'EchoOps AI',
+                  type: t.type || (t.category === 'action' ? 'action' : t.category === 'error' ? 'error' : 'system'),
+                  badge: t.badge || 'EVENT',
                 })),
               );
             }
