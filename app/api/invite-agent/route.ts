@@ -8,7 +8,7 @@ import {
   MiniMaxTTS,
   OpenAI,
 } from 'agora-agents';
-import { ClientStartRequest, AgentResponse } from '@/types/conversation';
+import { AgentResponse } from '@/types/conversation';
 import { DEFAULT_AGENT_UID } from '@/lib/agora';
 import { registerSession } from '@/lib/agentSessions';
 
@@ -37,8 +37,9 @@ export async function POST(request: NextRequest) {
   try {
     // --- 1. Parse request ---
 
-    const body: ClientStartRequest = await request.json();
-    const { requester_id, channel_name } = body;
+    const body = await request.json();
+    const channel_name = (body.channel_name || body.channel || '') as string;
+    const requester_id = (body.requester_id || body.uid || '') as string;
 
     // Validate required env vars on first request so misconfiguration surfaces
     // with a clear error message rather than a silent failure.

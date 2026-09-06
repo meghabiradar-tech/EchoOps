@@ -177,6 +177,7 @@ export default function LandingPage() {
       setRtmClient(rtm);
       setAgoraData({ ...responseData, agentId: agentData?.agent_id });
       setShowConversation(true);
+      setViewMode('split');
     } catch (err) {
       console.warn('Fallback to demo voice room:', err);
       setAgoraData({
@@ -185,6 +186,7 @@ export default function LandingPage() {
         channel: channelName.trim() || 'echoops-war-room-042',
       });
       setShowConversation(true);
+      setViewMode('split');
     } finally {
       setIsLoading(false);
     }

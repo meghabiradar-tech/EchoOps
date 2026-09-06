@@ -206,9 +206,29 @@ export function ActiveRoom({
       incidentCtxRef.current?.applyStateDelta(delta);
     },
     onBotSpeech: (speechText) => {
+      const clean = speechText?.trim() || '';
+      if (!clean) return;
       incidentCtxRef.current?.addTranscript({
         speaker: 'EchoOps AI Commander',
-        text: speechText,
+        text: clean,
+      });
+      setRawTranscript((prev) => {
+        const alreadyExists = prev.some(
+          (t) => (t.text || '').trim().toLowerCase() === clean.toLowerCase(),
+        );
+        if (alreadyExists) return prev;
+        return [
+          ...prev,
+          {
+            uid: agentUID,
+            text: clean,
+            status: TurnStatus.END,
+            turn_id: Date.now(),
+            _time: Date.now(),
+            stream_id: 0,
+            metadata: null,
+          },
+        ];
       });
     },
   });
@@ -401,20 +421,26 @@ export function ActiveRoom({
           text: cleanText,
         });
       }
-      // Append captured utterance to rawTranscript if Agora backend STT hasn't pushed it
-      if (!agoraTranscriptionAvailable && cleanText) {
-        setRawTranscript((prev) => [
-          ...prev,
-          {
-            uid: '0',
-            text: cleanText,
-            status: TurnStatus.END,
-            turn_id: Date.now(),
-            _time: Date.now(),
-            stream_id: 0,
-            metadata: null,
-          },
-        ]);
+      // Append captured utterance to rawTranscript if not already present
+      if (cleanText) {
+        setRawTranscript((prev) => {
+          const alreadyExists = prev.some(
+            (t) => (t.text || '').trim().toLowerCase() === cleanText.toLowerCase(),
+          );
+          if (alreadyExists) return prev;
+          return [
+            ...prev,
+            {
+              uid: '0',
+              text: cleanText,
+              status: TurnStatus.END,
+              turn_id: Date.now(),
+              _time: Date.now(),
+              stream_id: 0,
+              metadata: null,
+            },
+          ];
+        });
       }
     },
   });
@@ -583,13 +609,10 @@ export function ActiveRoom({
 
               if (item.text && item.text.trim()) {
                 const isUser = item.uid === '0' || String(item.uid) === String(client.uid);
-                // Only push remote turns if not already added by local utterance handler
-                if (!isUser) {
-                  incidentCtxRef.current?.addTranscript({
-                    speaker: 'EchoOps AI Commander',
-                    text: item.text.trim(),
-                  });
-                }
+                incidentCtxRef.current?.addTranscript({
+                  speaker: isUser ? 'You (Human Operator)' : 'EchoOps AI Commander',
+                  text: item.text.trim(),
+                });
               }
 
               const payload = {
@@ -756,7 +779,8 @@ export function ActiveRoom({
 
   const transcript = useMemo(() => {
     const base = normalizeTranscript(rawTranscript, String(client.uid));
-    if (!agoraTranscriptionAvailable && interimTranscript.trim() && !isBotSpeaking) {
+    const hasInProgress = base.some((entry) => entry.status === TurnStatus.IN_PROGRESS);
+    if (!hasInProgress && interimTranscript.trim() && !isBotSpeaking) {
       return [
         ...base,
         {
@@ -771,7 +795,7 @@ export function ActiveRoom({
       ];
     }
     return base;
-  }, [rawTranscript, client.uid, agoraTranscriptionAvailable, interimTranscript, isBotSpeaking]);
+  }, [rawTranscript, client.uid, interimTranscript, isBotSpeaking]);
 
   const activeInProgress = useMemo(() => {
     return transcript.find((entry) => entry.status === TurnStatus.IN_PROGRESS) ?? null;

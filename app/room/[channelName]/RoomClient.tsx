@@ -76,7 +76,7 @@ export function RoomClient({ channelName }: RoomClientProps) {
   const router = useRouter();
   const cleanChannel = decodeURIComponent(channelName).trim() || 'echoops-war-room-042';
 
-  const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
+  const [viewMode, setViewMode] = useState<ViewMode>('split');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [micWarning, setMicWarning] = useState<string | null>(null);
@@ -345,7 +345,7 @@ export function RoomClient({ channelName }: RoomClientProps) {
   );
 
   // Active Agora Voice Component
-  const activeAgoraView = agoraData && !isLocalVoiceMode && (
+  const activeAgoraView = agoraData && (
     <Suspense fallback={<LoadingSkeleton />}>
       <ErrorBoundary>
         <AgoraProvider>

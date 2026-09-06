@@ -44,9 +44,14 @@ export function QuickstartTranscriptPanel({
   );
 
   const allMessagesWithReply = useMemo(() => {
+    if (!assistantReply) return rawMessages;
+    const isAlreadyPresent = rawMessages.some(
+      (m) => (m.text || '').trim().toLowerCase() === assistantReply.trim().toLowerCase(),
+    );
+    if (isAlreadyPresent) return rawMessages;
     return [
       ...rawMessages,
-      ...(assistantReply ? [{ uid: Number(agentUID), text: assistantReply, turn_id: 'copilot-reply' }] : []),
+      { uid: Number(agentUID), text: assistantReply, turn_id: 'copilot-reply' },
     ];
   }, [rawMessages, assistantReply, agentUID]);
 
@@ -157,8 +162,17 @@ export function QuickstartTranscriptPanel({
         className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4"
       >
         {filteredMessages.length === 0 && !assistantReply && !isAssistantProcessing ? (
-          <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
-            No voice turns found for &ldquo;{filterRole}&rdquo;.
+          <div className="flex h-full flex-col items-center justify-center text-center p-6 space-y-2 text-muted-foreground">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary mb-1">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+              </span>
+            </div>
+            <p className="text-xs font-semibold text-foreground">Listening for Voice & Telemetry</p>
+            <p className="text-[11px] max-w-[220px] text-muted-foreground leading-relaxed">
+              Speak into your microphone or trigger runbook actions to stream live incident turns.
+            </p>
           </div>
         ) : (
           filteredMessages.map((message, index) => {
