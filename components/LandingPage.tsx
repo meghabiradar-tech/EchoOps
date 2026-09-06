@@ -7,13 +7,10 @@ import { useRouter } from 'next/navigation';
 import type { RTMClient } from 'agora-rtm';
 import {
   Radio,
-  Mic,
   LayoutDashboard,
   Terminal,
   Columns2,
-  PhoneCall,
   PhoneOff,
-  Volume2,
   ExternalLink,
 } from 'lucide-react';
 import type {
@@ -266,18 +263,43 @@ export default function LandingPage() {
     }
   }, [agoraData, rtmClient]);
 
-  // Top header view toggle and voice buttons
-  const headerRightControls = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-      {/* View Mode Switcher */}
+  // Sleek top header navigation & action controls (used in Console and Split toolbars)
+  const renderHeaderControls = () => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+      {/* Secondary Action: Rooms & History */}
+      <Link
+        href="/rooms"
+        id="top-nav-rooms"
+        title="Browse all incident rooms and conversation histories"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '5px',
+          padding: '6px 12px',
+          background: '#ffffff',
+          color: '#475569',
+          border: '1px solid #e2e8f0',
+          borderRadius: '8px',
+          fontSize: '0.75rem',
+          fontWeight: 600,
+          textDecoration: 'none',
+          transition: 'all 0.15s ease',
+        }}
+      >
+        <Radio size={13} className="text-indigo-600" />
+        <span>Rooms & History</span>
+      </Link>
+
+      {/* Segmented View Mode Tabs */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           background: '#f1f5f9',
-          borderRadius: '8px',
-          padding: '2px',
+          borderRadius: '9px',
+          padding: '3px',
           border: '1px solid #e2e8f0',
+          gap: '2px',
         }}
       >
         <button
@@ -287,7 +309,7 @@ export default function LandingPage() {
             display: 'flex',
             alignItems: 'center',
             gap: '5px',
-            padding: '4px 10px',
+            padding: '5px 11px',
             fontSize: '0.75rem',
             fontWeight: 600,
             borderRadius: '7px',
@@ -299,7 +321,7 @@ export default function LandingPage() {
             transition: 'all 0.15s ease',
           }}
         >
-          <LayoutDashboard size={14} />
+          <LayoutDashboard size={13} />
           <span>Dashboard</span>
         </button>
 
@@ -310,7 +332,7 @@ export default function LandingPage() {
             display: 'flex',
             alignItems: 'center',
             gap: '5px',
-            padding: '4px 10px',
+            padding: '5px 11px',
             fontSize: '0.75rem',
             fontWeight: 600,
             borderRadius: '7px',
@@ -322,7 +344,7 @@ export default function LandingPage() {
             transition: 'all 0.15s ease',
           }}
         >
-          <Terminal size={14} />
+          <Terminal size={13} />
           <span>SRE Console</span>
           {showConversation && (
             <span
@@ -344,7 +366,7 @@ export default function LandingPage() {
             display: 'flex',
             alignItems: 'center',
             gap: '5px',
-            padding: '4px 10px',
+            padding: '5px 11px',
             fontSize: '0.75rem',
             fontWeight: 600,
             borderRadius: '7px',
@@ -356,312 +378,86 @@ export default function LandingPage() {
             transition: 'all 0.15s ease',
           }}
         >
-          <Columns2 size={14} />
-          <span>Split</span>
+          <Columns2 size={13} />
+          <span>Split View</span>
         </button>
       </div>
 
-      {/* Voice Quick Action - Opens Dedicated Room in New Tab */}
+      {/* The Single Primary War Room Action Button */}
       {!showConversation ? (
+        <button
+          onClick={handleOpenDedicatedRoom}
+          id="top-primary-join-war-room"
+          title="Open Dedicated Voice War Room in a New Tab"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '7px 15px',
+            background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+            color: '#ffffff',
+            borderRadius: '9999px',
+            fontSize: '0.775rem',
+            fontWeight: 700,
+            border: 'none',
+            cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Radio size={14} className="animate-pulse" />
+          <span>Join War Room</span>
+          <ExternalLink size={13} className="opacity-80" />
+        </button>
+      ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <button
-            onClick={handleOpenDedicatedRoom}
-            id="header-join-voice-bridge"
-            title="Open Dedicated Voice Incident Room in New Tab"
+          <span
             style={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '6px 14px',
-              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-              color: '#ffffff',
+              gap: '5px',
+              padding: '5px 11px',
+              background: '#ecfdf5',
+              color: '#059669',
+              border: '1px solid #a7f3d0',
               borderRadius: '9999px',
               fontSize: '0.75rem',
               fontWeight: 700,
-              border: 'none',
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
-              transition: 'all 0.2s ease',
             }}
           >
-            <PhoneCall size={13} />
-            <span>Join Voice Room</span>
-            <ExternalLink size={12} className="opacity-80" />
-          </button>
+            <span
+              style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: '#10b981',
+              }}
+            />
+            Voice Live
+          </span>
           <button
-            onClick={handleOpenDedicatedRoom}
-            id="header-open-room-tab"
-            title="Open Dedicated Incident Room in New Tab"
+            onClick={handleEndConversation}
+            disabled={isStopping}
             style={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '4px',
-              padding: '6px 10px',
-              background: '#f8fafc',
-              color: '#475569',
+              gap: '5px',
+              padding: '5px 11px',
+              background: '#fef2f2',
+              color: '#dc2626',
+              border: '1px solid #fecaca',
               borderRadius: '9999px',
               fontSize: '0.75rem',
               fontWeight: 600,
-              border: '1px solid #cbd5e1',
-              cursor: 'pointer',
+              cursor: isStopping ? 'wait' : 'pointer',
+              transition: 'all 0.15s ease',
             }}
+            id="top-leave-voice"
+            title="Leave Voice Room"
           >
-            <ExternalLink size={12} />
-            <span>Room Tab</span>
+            <PhoneOff size={13} />
+            <span>{isStopping ? 'Leaving...' : 'Leave'}</span>
           </button>
-        </div>
-      ) : (
-        <button
-          onClick={handleEndConversation}
-          disabled={isStopping}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '6px 14px',
-            background: '#fee2e2',
-            color: '#dc2626',
-            borderRadius: '9999px',
-            fontSize: '0.75rem',
-            fontWeight: 700,
-            border: '1px solid #fecaca',
-            cursor: isStopping ? 'wait' : 'pointer',
-            transition: 'all 0.2s ease',
-          }}
-        >
-          <PhoneOff size={13} />
-          <span>{isStopping ? 'Leaving...' : 'Leave Voice'}</span>
-        </button>
-      )}
-    </div>
-  );
-
-  // Top Voice Commander War Room Banner (Rendered inside Incident Dashboard)
-  const voiceBanner = (
-    <div
-      style={{
-        background: !showConversation
-          ? 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)'
-          : 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)',
-        border: !showConversation ? '1px solid #e2e8f0' : '1px solid #bbf7d0',
-        borderRadius: '14px',
-        padding: '1rem 1.4rem',
-        marginBottom: '1.25rem',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.75rem',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '0.75rem',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
-          <div
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '10px',
-              background: !showConversation ? '#ede9fe' : '#dcfce7',
-              color: !showConversation ? '#6d28d9' : '#15803d',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {showConversation ? <Volume2 size={20} /> : <Radio size={20} />}
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-                Voice AI Incident Commander Bridge
-              </span>
-              <span
-                style={{
-                  fontSize: '0.68rem',
-                  padding: '2px 8px',
-                  borderRadius: '9999px',
-                  background: showConversation ? '#dcfce7' : '#ede9fe',
-                  color: showConversation ? '#15803d' : '#6d28d9',
-                  fontWeight: 600,
-                }}
-              >
-                {showConversation ? 'AUDIO LIVE' : 'AGORA SD-RTN'}
-              </span>
-            </div>
-            <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-              {showConversation
-                ? `Connected as UID: ${agoraData?.uid} • Managed STT (Deepgram Nova-3), GPT-4o-mini Incident Commander, MiniMax TTS`
-                : 'Join the voice bridge to speak directly with the AI Incident Commander and incident responders.'}
-            </p>
-          </div>
-        </div>
-
-        {/* Input and Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-          {!showConversation ? (
-            <>
-              <input
-                type="text"
-                value={channelName}
-                onChange={(e) => setChannelName(e.target.value)}
-                placeholder="Channel Name"
-                style={{
-                  padding: '6px 12px',
-                  fontSize: '0.8rem',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '8px',
-                  background: '#ffffff',
-                  outline: 'none',
-                  minWidth: '200px',
-                  color: '#0f172a',
-                }}
-              />
-              <button
-                onClick={handleOpenDedicatedRoom}
-                id="banner-connect-voice"
-                title="Open Dedicated Voice Incident Room in New Browser Tab"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '7px 16px',
-                  background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                  color: '#ffffff',
-                  borderRadius: '8px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  border: 'none',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)',
-                }}
-              >
-                <Radio size={14} />
-                <span>Join Voice Room</span>
-                <ExternalLink size={13} className="opacity-80" />
-              </button>
-
-              <Link
-                href="/rooms"
-                id="banner-all-rooms"
-                title="Browse All Incident Rooms and Conversation History"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '7px 14px',
-                  background: '#f8fafc',
-                  color: '#334155',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '8px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                }}
-              >
-                <span>All Rooms & History</span>
-              </Link>
-
-              <button
-                onClick={handleOpenDedicatedRoom}
-                id="banner-open-room-tab"
-                title="Open Dedicated Voice Incident Room in New Tab"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '7px 14px',
-                  background: '#ffffff',
-                  color: '#4f46e5',
-                  border: '1px solid #c7d2fe',
-                  borderRadius: '8px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                <Mic size={14} />
-                <span>Room Tab</span>
-                <ExternalLink size={13} className="opacity-80" />
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setViewMode('console')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '7px 14px',
-                  background: '#ffffff',
-                  color: '#4f46e5',
-                  border: '1px solid #c7d2fe',
-                  borderRadius: '8px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                <Terminal size={14} />
-                <span>Open SRE Console & Runbooks →</span>
-              </button>
-              <button
-                onClick={handleEndConversation}
-                disabled={isStopping}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '7px 14px',
-                  background: '#ef4444',
-                  color: '#ffffff',
-                  borderRadius: '8px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  border: 'none',
-                  cursor: isStopping ? 'wait' : 'pointer',
-                }}
-              >
-                <PhoneOff size={14} />
-                <span>{isStopping ? 'Leaving...' : 'Disconnect Voice'}</span>
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {error && (
-        <div
-          style={{
-            padding: '8px 12px',
-            background: '#fee2e2',
-            color: '#b91c1c',
-            borderRadius: '6px',
-            fontSize: '0.75rem',
-          }}
-        >
-          {error}
-        </div>
-      )}
-
-      {agentJoinError && (
-        <div
-          style={{
-            padding: '8px 12px',
-            background: '#fef3c7',
-            color: '#92400e',
-            borderRadius: '6px',
-            fontSize: '0.75rem',
-          }}
-        >
-          ⚠️ AI Agent invite returned an error. Voice room audio is still connected.
         </div>
       )}
     </div>
@@ -686,12 +482,16 @@ export default function LandingPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      {/* 1. DASHBOARD VIEW (Default: Megha's Incident Dashboard with integrated Voice Bridge) */}
+      {/* 1. DASHBOARD VIEW (Default: Streamlined Incident Dashboard Cockpit) */}
       {viewMode === 'dashboard' && (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <IncidentDashboard
-            voiceSlot={voiceBanner}
-            headerRightSlot={headerRightControls}
+            viewMode={viewMode}
+            onSelectViewMode={setViewMode}
+            showConversation={showConversation}
+            onEndConversation={handleEndConversation}
+            isStopping={isStopping}
+            channelName={channelName}
           />
 
           {/* Background audio runner when voice is active on dashboard */}
@@ -756,7 +556,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {headerRightControls}
+            {renderHeaderControls()}
           </div>
 
           {/* ActiveRoom or Pre-call card */}
@@ -838,6 +638,36 @@ export default function LandingPage() {
                     >
                       {isLoading ? 'Connecting to Agora...' : 'Launch SRE Voice Console'}
                     </button>
+
+                    {error && (
+                      <div
+                        style={{
+                          padding: '6px 10px',
+                          background: '#fee2e2',
+                          color: '#b91c1c',
+                          borderRadius: '6px',
+                          fontSize: '0.75rem',
+                          marginTop: '0.5rem',
+                        }}
+                      >
+                        {error}
+                      </div>
+                    )}
+
+                    {agentJoinError && (
+                      <div
+                        style={{
+                          padding: '6px 10px',
+                          background: '#fef3c7',
+                          color: '#92400e',
+                          borderRadius: '6px',
+                          fontSize: '0.75rem',
+                          marginTop: '0.5rem',
+                        }}
+                      >
+                        ⚠️ AI Agent invite returned an error. Audio bridge is connected.
+                      </div>
+                    )}
                   </div>
 
                   <button
@@ -892,13 +722,20 @@ export default function LandingPage() {
               </span>
             </div>
 
-            {headerRightControls}
+            {renderHeaderControls()}
           </div>
 
           <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
             {/* Left: Dashboard */}
             <div style={{ flex: 1, overflowY: 'auto', borderRight: '1px solid #e2e8f0' }}>
-              <IncidentDashboard voiceSlot={voiceBanner} />
+              <IncidentDashboard
+                viewMode={viewMode}
+                onSelectViewMode={setViewMode}
+                showConversation={showConversation}
+                onEndConversation={handleEndConversation}
+                isStopping={isStopping}
+                channelName={channelName}
+              />
             </div>
 
             {/* Right: SRE Console */}

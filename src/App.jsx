@@ -13,11 +13,29 @@ import VoiceTranscriptStream from './components/VoiceTranscriptStream';
 import { IncidentProvider, useIncidentContext } from './context/IncidentContext';
 import './App.css';
 
-function DashboardContent({ voiceSlot, liveTranscripts, headerRightSlot } = {}) {
+function DashboardContent({
+  voiceSlot,
+  liveTranscripts,
+  headerRightSlot,
+  viewMode,
+  onSelectViewMode,
+  showConversation,
+  onEndConversation,
+  isStopping,
+  channelName,
+} = {}) {
   return (
     <div className="app-layout">
       {/* 1. HEADER with EchoOps, Voice AI Commander, and LIVE status */}
-      <Header rightSlot={headerRightSlot} />
+      <Header
+        viewMode={viewMode}
+        onSelectViewMode={onSelectViewMode}
+        showConversation={showConversation}
+        onEndConversation={onEndConversation}
+        isStopping={isStopping}
+        channelName={channelName}
+        rightSlot={headerRightSlot}
+      />
 
       <main className="dashboard-container">
         {/* Voice Commander War Room Slot (when active or prompt) */}
