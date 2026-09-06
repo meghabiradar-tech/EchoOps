@@ -114,7 +114,7 @@ export interface StateDelta {
   } | null;
   recommendedAction?: {
     actionTitle: string;
-    subtitle: string;
+    subtitle?: string;
     impactAssessment: string;
     target: string;
   } | null;
@@ -138,6 +138,10 @@ export interface StateDelta {
 }
 
 export interface IncidentContextValue {
+  channelName: string;
+  setChannelName: React.Dispatch<React.SetStateAction<string>>;
+  rehydrateRoom: (targetChannel?: string) => Promise<void>;
+  isRehydrating: boolean;
   incident: IncidentOverview;
   setIncident: React.Dispatch<React.SetStateAction<IncidentOverview>>;
   impactMetrics: ImpactMetrics;
@@ -177,5 +181,6 @@ export interface IncidentContextValue {
   applyStateDelta: (delta: StateDelta) => void;
 }
 
-export function IncidentProvider(props: { children: ReactNode }): JSX.Element;
+export function IncidentProvider(props: { children: ReactNode; initialChannel?: string }): JSX.Element;
 export function useIncidentContext(): IncidentContextValue;
+

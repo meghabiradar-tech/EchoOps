@@ -153,10 +153,12 @@ export function useSpeechCapture({
   }, [agoraSpeech, agoraTranscriptionAvailable, flushTranscript, isBotSpeaking, isMicActive, isVadActive]);
 
   useEffect(() => {
-    // Mute browser speech recognition while mic is off, VAD is inactive, bot is speaking, or Agora transcription is handling STT
-    if (!isMicActive || !isVadActive || isBotSpeaking || agoraTranscriptionAvailable || typeof window === 'undefined') {
+    // Mute browser speech recognition while mic is off, bot is speaking, or Agora transcription is handling STT
+    if (!isMicActive || isBotSpeaking || agoraTranscriptionAvailable || typeof window === 'undefined') {
       shouldRestartRef.current = false;
-      recognitionRef.current?.stop();
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
       recognitionRef.current = null;
       setIsListening(false);
       return;
@@ -177,7 +179,7 @@ export function useSpeechCapture({
     shouldRestartRef.current = true;
 
     recognition.onresult = (event) => {
-      if (isBotSpeakingRef.current || !isVadActiveRef.current) return;
+      if (isBotSpeakingRef.current) return;
       let interim = '';
       let finalized = '';
 
@@ -207,7 +209,7 @@ export function useSpeechCapture({
 
     recognition.onerror = (event) => {
       if (event.error !== 'aborted' && event.error !== 'no-speech') {
-        console.warn('Browser speech recognition unavailable:', event.error);
+        console.warn('Browser speech recognition notice:', event.error);
       }
       setIsListening(false);
     };
@@ -217,6 +219,7 @@ export function useSpeechCapture({
       if (!shouldRestartRef.current) return;
       try {
         recognition.start();
+        setIsListening(true);
       } catch {
         shouldRestartRef.current = false;
       }
@@ -242,7 +245,8 @@ export function useSpeechCapture({
       recognitionRef.current = null;
       setIsListening(false);
     };
-  }, [agoraTranscriptionAvailable, flushTranscript, isBotSpeaking, isMicActive, isVadActive, language]);
+  }, [agoraTranscriptionAvailable, flushTranscript, isBotSpeaking, isMicActive, language]);
+
 
   return { isListening, interimTranscript, finalTranscript, flushTranscript };
 }

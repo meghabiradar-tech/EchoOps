@@ -1,12 +1,12 @@
-'use client';
-
 import React from 'react';
-import { Clock, AlertTriangle, XCircle, Sparkles, ShieldX, CheckCircle2 } from 'lucide-react';
+import Link from 'next/link';
+import { Clock, AlertTriangle, XCircle, Sparkles, ShieldX, CheckCircle2, ArrowRight } from 'lucide-react';
 import { useIncidentContext } from '../context/IncidentContext';
 
 export default function IncidentTimeline(props) {
   const context = useIncidentContext();
   const timeline = props?.timeline || context?.timeline || [];
+  const channel = context?.channelName || context?.incident?.channelName || 'echoops-war-room-042';
 
   const getNodeIcon = (type) => {
     switch (type) {
@@ -34,8 +34,33 @@ export default function IncidentTimeline(props) {
           </div>
           <h2 className="card-title">Incident Timeline</h2>
         </div>
-        <span className="card-badge-count" id="timeline-events-count">{timeline.length} Chronological Events</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="card-badge-count" id="timeline-events-count">{timeline.length} Chronological Events</span>
+          <Link
+            href={`/room/${encodeURIComponent(channel)}/timeline`}
+            className="timeline-drilldown-link"
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              color: '#4f46e5',
+              background: '#f5f3ff',
+              border: '1px solid #ddd6fe',
+              borderRadius: '6px',
+              padding: '2px 8px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '3px',
+              textDecoration: 'none',
+            }}
+            title="Open Dedicated Post-Mortem & Timeline Drilldown"
+            id="timeline-drilldown-button"
+          >
+            <span>Drilldown</span>
+            <ArrowRight size={11} />
+          </Link>
+        </div>
       </div>
+
 
       <div className="card-body">
         <div className="timeline-container">

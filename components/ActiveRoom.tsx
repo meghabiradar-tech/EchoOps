@@ -8,7 +8,6 @@ import AgoraRTC, {
   useClientEvent,
   useJoin,
   usePublish,
-  RemoteUser,
   UID,
 } from 'agora-rtc-react';
 import {
@@ -23,7 +22,6 @@ import {
   TurnStatus,
 } from 'agora-agent-client-toolkit';
 import { AgentVisualizer } from 'agora-agent-uikit';
-import { MicButtonWithVisualizer } from 'agora-agent-uikit/rtc';
 import { Button } from '@/components/ui/button';
 import { DEFAULT_AGENT_UID } from '@/lib/agora';
 import {
@@ -33,7 +31,6 @@ import {
   normalizeTimestampMs,
   normalizeTranscript,
 } from '@/lib/conversation';
-import { MicrophoneSelector } from './MicrophoneSelector';
 import {
   getConversationIssueSeverity,
   type ConnectionIssue,
@@ -45,8 +42,9 @@ import { QuickstartConversationLayout } from './QuickstartConversationLayout';
 import { QuickstartPipelineMetrics, type QuickstartAgentMetric } from './QuickstartPipelineMetrics';
 import { QuickstartTranscriptPanel } from './QuickstartTranscriptPanel';
 import { RunbookQuickActions } from './RunbookQuickActions';
+import { FloatingAudioDock } from './FloatingAudioDock';
 import type { ActiveRoomProps, ConversationComponentProps } from '@/types/conversation';
-import { useAiSpeechHandler } from '@/hooks/useAiSpeechHandler';
+import { useAiSpeechHandler, stopAudibleSpeech } from '@/hooks/useAiSpeechHandler';
 import { useIncidentContext } from '@/src/context/IncidentContext';
 import {
   useSpeechCapture,
@@ -137,12 +135,62 @@ export function ActiveRoom({
   const [isIncidentHistoryOpen, setIsIncidentHistoryOpen] = useState(false);
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const [isInterrupted, setIsInterrupted] = useState(false);
+  const [isDeafened, setIsDeafened] = useState(false);
+  const isDeafenedRef = useRef(false);
+  useEffect(() => {
+    isDeafenedRef.current = isDeafened;
+  }, [isDeafened]);
 
   const incidentCtx = useIncidentContext();
   const incidentCtxRef = useRef(incidentCtx);
   useEffect(() => {
     incidentCtxRef.current = incidentCtx;
   }, [incidentCtx]);
+
+  // StrictMode guard
+  const [isReady, setIsReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const id = setTimeout(() => {
+      if (!cancelled) setIsReady(true);
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+      setIsReady(false);
+    };
+  }, []);
+
+  const { isConnected: joinSuccess } = useJoin(
+    {
+      appid: process.env.NEXT_PUBLIC_AGORA_APP_ID!,
+      channel: agoraData.channel,
+      token: agoraData.token,
+      uid: parseInt(agoraData.uid, 10),
+    },
+    isReady,
+  );
+
+  const { localMicrophoneTrack } = useLocalMicrophoneTrack(isReady);
+  const [micPermissionError, setMicPermissionError] = useState<string | null>(null);
+
+  // Toggle speaker deafening (stop/resume all remote audio tracks)
+  const toggleDeafen = useCallback(() => {
+    setIsDeafened((prev) => {
+      const next = !prev;
+      remoteUsers.forEach((user) => {
+        if (next) {
+          user.audioTrack?.stop();
+        } else {
+          user.audioTrack?.play();
+        }
+      });
+      return next;
+    });
+  }, [remoteUsers]);
+
+  // Single-source audio exclusivity: detect if Agora audio is actively connected
+  const isAgoraAudioActive = Boolean(joinSuccess && (isAgentConnected || remoteUsers.length > 0));
 
   const {
     processUserSpeech,
@@ -153,6 +201,7 @@ export function ActiveRoom({
     abortPendingSpeech,
   } = useAiSpeechHandler({
     channel: agoraData.channel,
+    isAgoraAudioActive,
     onStateDelta: (delta) => {
       incidentCtxRef.current?.applyStateDelta(delta);
     },
@@ -202,33 +251,6 @@ export function ActiveRoom({
     }
   }, [connectionIssues.length]);
 
-  // StrictMode guard
-  const [isReady, setIsReady] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    const id = setTimeout(() => {
-      if (!cancelled) setIsReady(true);
-    }, 0);
-    return () => {
-      cancelled = true;
-      clearTimeout(id);
-      setIsReady(false);
-    };
-  }, []);
-
-  const { isConnected: joinSuccess } = useJoin(
-    {
-      appid: process.env.NEXT_PUBLIC_AGORA_APP_ID!,
-      channel: agoraData.channel,
-      token: agoraData.token,
-      uid: parseInt(agoraData.uid, 10),
-    },
-    isReady,
-  );
-
-  const { localMicrophoneTrack } = useLocalMicrophoneTrack(isReady);
-  const [micPermissionError, setMicPermissionError] = useState<string | null>(null);
-
   // Audio initialization and mic permission probe
   const requestMicrophoneAccess = useCallback(async () => {
     if (!process.env.NEXT_PUBLIC_AGORA_APP_ID) {
@@ -266,7 +288,9 @@ export function ActiveRoom({
     try {
       await client.subscribe(user, mediaType);
       if (mediaType === 'audio') {
-        user.audioTrack?.play();
+        if (!isDeafenedRef.current) {
+          user.audioTrack?.play();
+        }
         console.info(`[EchoOps] Subscribed and playing remote audio track for UID: ${user.uid}`);
       }
     } catch (err) {
@@ -332,6 +356,7 @@ export function ActiveRoom({
   const interruptBotPlayback = useCallback(() => {
     setIsInterrupted(true);
     abortPendingSpeech();
+    stopAudibleSpeech();
     window.dispatchEvent(new CustomEvent('echoops:bot-interrupt'));
     remoteUsers
       .filter((user) => user.uid.toString() === agentUID)
@@ -833,6 +858,57 @@ export function ActiveRoom({
     onEndConversation();
   }, [onEndConversation]);
 
+  const handleSaveIncidentSummary = useCallback(() => {
+    try {
+      const channel = agoraData.channel ?? 'unknown-channel';
+      const now = new Date();
+      const ts = now.toISOString();
+      const entries = transcript.map((t) => ({
+        speaker: t.uid,
+        ts: typeof t._time === 'number' ? normalizeTimestampMs(t._time) : undefined,
+        text: t.text ?? '',
+        status: t.status,
+      }));
+
+      const incident: ArchivedIncident = {
+        id: `${channel}-${Date.now()}`,
+        title: `Incident Summary - ${channel}`,
+        timestamp: ts,
+        severity: 'Sev-3',
+        summary: entries.length > 0 ? entries[entries.length - 1].text : 'No transcript entries recorded.',
+        actionItems: [],
+        timeline: entries.map((entry) => ({
+          time: entry.ts ? new Date(entry.ts).toISOString() : ts,
+          note: `Speaker ${entry.speaker}: ${entry.text}`,
+        })),
+      };
+      saveCurrentIncident(incident);
+
+      const mdLines: string[] = [];
+      mdLines.push(`# Incident Summary — ${channel}`);
+      mdLines.push(`\nGenerated: ${ts}\n`);
+      mdLines.push(`## Timeline`);
+      entries.forEach((e) => {
+        const date = e.ts ? new Date(e.ts).toISOString() : '';
+        mdLines.push(`- **Speaker ${e.speaker}** — ${date}`);
+        mdLines.push(`  \n\n  ${e.text}\n`);
+      });
+
+      const filename = `incident-summary-${channel}-${Math.floor(Date.now() / 1000)}.md`;
+      const blob = new Blob([mdLines.join('\n')], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error('Failed to save incident summary:', err);
+    }
+  }, [agoraData.channel, transcript]);
+
   return (
     <>
       <QuickstartConversationLayout
@@ -917,7 +993,11 @@ export function ActiveRoom({
                 )}
               </div>
             )}
-            <BotAudioVisualizer isSpeaking={isBotSpeaking} />
+            <BotAudioVisualizer
+              isSpeaking={isBotSpeaking}
+              isProcessing={isCopilotProcessing}
+              isInterrupted={isInterrupted}
+            />
             {speechError && <p className="text-xs text-destructive">{speechError}</p>}
             <div className="mb-3 w-full flex items-center justify-center">
               <AgentVisualizer state={visualizerState} size="lg" />
@@ -936,90 +1016,23 @@ export function ActiveRoom({
                 <ParticipantChip key={user.uid} label={`User ${user.uid}`} isActive={String(activeInProgress?.uid) === String(user.uid)} />
               ))}
             </div>
-            {remoteUsers.map((user) => (
-              <div key={user.uid} className="hidden">
-                <RemoteUser user={user} />
-              </div>
-            ))}
           </div>
         }
         controls={
-          <div
-            className="mx-auto flex w-fit items-center gap-3 rounded-full border border-border bg-card/80 px-4 py-2 backdrop-blur-md"
-            role="group"
-            aria-label="Audio controls"
-          >
-            <div className="conversation-mic-host flex items-center justify-center">
-              <MicButtonWithVisualizer
-                isEnabled={isEnabled}
-                setIsEnabled={setIsEnabled}
-                track={localMicrophoneTrack}
-                onToggle={handleMicToggle}
-                className="overflow-visible"
-                aria-label={isEnabled ? 'Mute microphone' : 'Unmute microphone'}
-                enabledColor="hsl(var(--primary))"
-                disabledColor="hsl(var(--destructive))"
-              />
-            </div>
-            <MicrophoneSelector localMicrophoneTrack={localMicrophoneTrack} />
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() => {
-                  try {
-                    const channel = agoraData.channel ?? 'unknown-channel';
-                    const now = new Date();
-                    const ts = now.toISOString();
-                    const entries = transcript.map((t) => ({
-                      speaker: t.uid,
-                      ts: typeof t._time === 'number' ? normalizeTimestampMs(t._time) : undefined,
-                      text: t.text ?? '',
-                      status: t.status,
-                    }));
-
-                    const incident: ArchivedIncident = {
-                      id: `${channel}-${Date.now()}`,
-                      title: `Incident Summary - ${channel}`,
-                      timestamp: ts,
-                      severity: 'Sev-3',
-                      summary: entries.length > 0 ? entries[entries.length - 1].text : 'No transcript entries recorded.',
-                      actionItems: [],
-                      timeline: entries.map((entry) => ({
-                        time: entry.ts ? new Date(entry.ts).toISOString() : ts,
-                        note: `Speaker ${entry.speaker}: ${entry.text}`,
-                      })),
-                    };
-                    saveCurrentIncident(incident);
-
-                    const mdLines: string[] = [];
-                    mdLines.push(`# Incident Summary — ${channel}`);
-                    mdLines.push(`\nGenerated: ${ts}\n`);
-                    mdLines.push(`## Timeline`);
-                    entries.forEach((e) => {
-                      const date = e.ts ? new Date(e.ts).toISOString() : '';
-                      mdLines.push(`- **Speaker ${e.speaker}** — ${date}`);
-                      mdLines.push(`  \n\n  ${e.text}\n`);
-                    });
-
-                    const filename = `incident-summary-${channel}-${Math.floor(Date.now() / 1000)}.md`;
-                    const blob = new Blob([mdLines.join('\n')], { type: 'text/markdown' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    a.remove();
-                  } catch (err) {
-                    console.error('Failed to save incident summary:', err);
-                  }
-                }}
-              >
-                Save Incident Summary
-              </Button>
-            </div>
-          </div>
+          <FloatingAudioDock
+            isMicEnabled={isEnabled}
+            onToggleMic={handleMicToggle}
+            isDeafened={isDeafened}
+            onToggleDeafen={toggleDeafen}
+            isVadActive={isVadActive}
+            isBotSpeaking={isBotSpeaking}
+            connectionState={connectionState}
+            localMicrophoneTrack={localMicrophoneTrack}
+            onEndConversation={handleEndConversation}
+            isEnding={isStopping}
+            onSaveSummary={handleSaveIncidentSummary}
+            channelName={agoraData.channel}
+          />
         }
         onEndConversation={handleEndConversation}
         isEnding={isStopping}

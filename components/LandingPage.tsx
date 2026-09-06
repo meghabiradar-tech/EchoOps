@@ -358,14 +358,13 @@ export default function LandingPage() {
         </button>
       </div>
 
-      {/* Voice Quick Action */}
+      {/* Voice Quick Action - Opens Dedicated Room in New Tab */}
       {!showConversation ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <button
-            onClick={handleStartConversation}
-            disabled={isLoading}
+            onClick={handleOpenDedicatedRoom}
             id="header-join-voice-bridge"
-            title="Connect audio bridge directly on this page"
+            title="Open Dedicated Voice Incident Room in New Tab"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -377,13 +376,14 @@ export default function LandingPage() {
               fontSize: '0.75rem',
               fontWeight: 700,
               border: 'none',
-              cursor: isLoading ? 'wait' : 'pointer',
+              cursor: 'pointer',
               boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
               transition: 'all 0.2s ease',
             }}
           >
             <PhoneCall size={13} />
-            <span>{isLoading ? 'Connecting...' : 'Join Voice Bridge'}</span>
+            <span>Join Voice Room</span>
+            <ExternalLink size={12} className="opacity-80" />
           </button>
           <button
             onClick={handleOpenDedicatedRoom}
@@ -521,10 +521,9 @@ export default function LandingPage() {
                 }}
               />
               <button
-                onClick={handleStartConversation}
-                disabled={isLoading}
+                onClick={handleOpenDedicatedRoom}
                 id="banner-connect-voice"
-                title="Connect voice audio bridge directly on this dashboard"
+                title="Open Dedicated Voice Incident Room in New Browser Tab"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -536,12 +535,13 @@ export default function LandingPage() {
                   fontSize: '0.8rem',
                   fontWeight: 600,
                   border: 'none',
-                  cursor: isLoading ? 'wait' : 'pointer',
+                  cursor: 'pointer',
                   boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)',
                 }}
               >
-                <Radio size={14} className={isLoading ? 'animate-spin' : ''} />
-                <span>{isLoading ? 'Connecting...' : 'Connect Voice (This Tab)'}</span>
+                <Radio size={14} />
+                <span>Join Voice Room</span>
+                <ExternalLink size={13} className="opacity-80" />
               </button>
 
               <button

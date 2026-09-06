@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { loadHistoricalTranscripts } from '@/lib/db/models';
+
 type ConversationMessage = {
   role: string;
   content: string;
@@ -8,34 +10,37 @@ type ConversationMessage = {
 type RespondRequest = {
   transcript?: unknown;
   history?: unknown;
+  channelName?: unknown;
+  channel?: unknown;
   serviceName?: unknown;
   region?: unknown;
   activeAlerts?: unknown;
   recentEvents?: unknown;
+  confirmedFacts?: unknown;
   currentIncidentState?: unknown;
 };
 
 export type IncidentStateDelta = {
-  severity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-  newConfirmedFact?: {
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  newConfirmedFact: {
     text: string;
     verifiedVia: string;
     time: string;
   } | null;
-  newHypothesis?: {
+  newHypothesis: {
     status: string;
-    risk: string;
+    risk: 'High' | 'Medium' | 'Low';
     description: string;
     source: string;
   } | null;
-  recommendedAction?: {
+  recommendedAction: {
     actionTitle: string;
-    subtitle: string;
-    impactAssessment: string;
     target: string;
+    impactAssessment: string;
+    subtitle?: string;
   } | null;
 
-  // Extensions to ensure backwards compatibility with dashboard cards
+  // Backwards compatibility helpers for UI cards
   incident?: Partial<{
     id: string;
     title: string;
@@ -100,18 +105,22 @@ export type RespondResponse = {
   stateDelta: IncidentStateDelta;
 };
 
-const SYSTEM_PROMPT = `You are the EchoOps AI Incident Commander leading a high-severity war room. Analyze incoming voice transcripts from engineers, correlate symptoms, identify root causes, and verbally issue concise, high-priority mitigation recommendations.
+const SYSTEM_PROMPT = `You are the EchoOps AI Incident Commander leading a high-severity production incident war room.
+Your persona: Decisive, authoritative Principal Site Reliability Engineer (SRE) and Incident Commander.
 
-Keep spoken answers under 2–3 sharp, technical sentences optimized for low-latency text-to-speech. Never give generic boilerplate; cite specific infrastructure layers (e.g., connection pools, thread starvation, rollout rollbacks, pod restarts).
+Operational directives:
+1. Provide short (2–3 sentences maximum), precise, high-priority operational suggestions rather than generic text.
+2. Speak directly to infrastructure failure modes (e.g. connection pool exhaustion, worker pod thread starvation, deadlock, memory pressure, canary rollback, ingress 504 timeouts). Never give generic filler like "monitor logs" or "investigate further".
+3. Synthesize past discussion turns and verified facts from the war room history to retain continuity and make progressive, escalating decisions.
 
-You MUST respond strictly with a valid JSON object in this exact schema:
+You MUST respond strictly with a single valid JSON object following this exact contract:
 {
-  "speech": "Concise, sharp verbal advice and immediate tactical next step (under 2-3 sentences)",
+  "speech": "String (verbal tactical next step, 2-3 sentences)",
   "stateDelta": {
     "severity": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
     "newConfirmedFact": {
       "text": "Verified technical fact statement",
-      "verifiedVia": "Source/APM tool (e.g. Postgres APM, Envoy Gateway, Datadog)",
+      "verifiedVia": "Source/tool (e.g. Postgres APM, Envoy Gateway, Datadog)",
       "time": "HH:MM"
     } | null,
     "newHypothesis": {
@@ -121,17 +130,16 @@ You MUST respond strictly with a valid JSON object in this exact schema:
       "source": "Voice bridge observation"
     } | null,
     "recommendedAction": {
-      "actionTitle": "Short, commanding action title (e.g. Authorize rollback to v2.4.0)",
-      "subtitle": "Technical pipeline or subsystem description",
-      "impactAssessment": "Risk/impact assessment of executing this operation",
-      "target": "Infrastructure target (cluster, pod, namespace, or connection string)"
+      "actionTitle": "Short commanding action title (e.g. Drain postgres connection pool)",
+      "target": "Infrastructure target (e.g. postgres-primary:5432 or k8s-prod-useast1)",
+      "impactAssessment": "Blast radius and downtime impact assessment"
     } | null
   }
 }
 
 Operational safety rules:
-- For high-impact operations (e.g., database restart, canary rollback, pool drain, traffic shedding), always populate recommendedAction so the Human-in-the-Loop governance card is staged for 1-click execution.
-- If no new fact or hypothesis is discovered, set that key to null.`;
+- For high-impact operations (e.g. pool drain, canary rollback, pod restart, traffic shedding), always populate recommendedAction so Human-In-The-Loop governance is staged.
+- If no new fact or hypothesis is discovered in this turn, set that key to null.`;
 
 const LLM_TIMEOUT_MS = 5000;
 
@@ -410,21 +418,40 @@ export async function POST(request: NextRequest) {
 
   if (apiKey && transcript) {
     try {
+      const channel = String(body.channelName || body.channel || 'echoops-war-room-042');
       const messages: ConversationMessage[] = [
         { role: 'system', content: SYSTEM_PROMPT },
       ];
 
-      if (Array.isArray(body.history)) {
-        (body.history as ConversationMessage[]).slice(-4).forEach((msg) => {
-          if (msg && typeof msg.content === 'string') {
-            messages.push({ role: msg.role || 'user', content: msg.content.slice(0, 150) });
-          }
-        });
+      // Re-hydrate prior conversation history from memory or DB if not passed directly
+      let historyItems: Array<{ role: string; content: string }> = [];
+      if (Array.isArray(body.history) && body.history.length > 0) {
+        historyItems = (body.history as ConversationMessage[]).map((msg) => ({
+          role: msg.role === 'assistant' ? 'assistant' : 'user',
+          content: String(msg.content || '').slice(0, 200),
+        }));
+      } else {
+        const stored = await loadHistoricalTranscripts(channel);
+        historyItems = stored.slice(-8).map((t) => ({
+          role: t.speaker.includes('AI') || t.speaker.includes('Bot') || t.speaker.includes('Commander') ? 'assistant' : 'user',
+          content: `${t.speaker}: ${t.text}`,
+        }));
+      }
+
+      // Add prior discussion turns (up to 8 turns) to preserve war room memory
+      historyItems.slice(-8).forEach((item) => {
+        messages.push({ role: item.role, content: item.content });
+      });
+
+      // Contextual metadata injection
+      let contextNote = `Active War Room Channel: ${channel}\nService: payment-service-prod\nEnvironment: PRODUCTION (us-east-1)\nActive Incident Symptoms: Checkout HTTP 504 timeouts, elevated p99 latency, PostgreSQL connection saturation.`;
+      if (Array.isArray(body.confirmedFacts) && body.confirmedFacts.length > 0) {
+        contextNote += `\nEstablished Facts:\n- ${body.confirmedFacts.slice(-4).join('\n- ')}`;
       }
 
       messages.push({
         role: 'user',
-        content: `Engineer voice utterance: "${transcript}"\nCurrent Incident Context: Service=payment-service-prod, Environment=PRODUCTION (us-east-1), Active Issue=Checkout gateway 504 timeouts & DB pool saturation.`,
+        content: `Current War Room Context:\n${contextNote}\n\nEngineer voice utterance: "${transcript}"`,
       });
 
       const controller = new AbortController();
@@ -469,6 +496,7 @@ export async function POST(request: NextRequest) {
       console.warn('[EchoOps] OpenAI fetch failed or timed out, using intelligent SRE heuristic:', err);
     }
   }
+
 
   // Format response: SSE if requested, otherwise single JSON response
   if (isSseRequested) {

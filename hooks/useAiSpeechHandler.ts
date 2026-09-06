@@ -10,12 +10,6 @@ type SpeechHistoryItem = {
   content: string;
 };
 
-type UseAiSpeechHandlerOptions = {
-  channel: string;
-  onStateDelta?: (delta: IncidentStateDelta) => void;
-  onBotSpeech?: (text: string) => void;
-};
-
 type RespondPayload = {
   type?: unknown;
   text?: unknown;
@@ -24,6 +18,13 @@ type RespondPayload = {
   error?: unknown;
   actionsExecuted?: unknown;
 };
+
+export function stopAudibleSpeech() {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+  } catch {}
+}
 
 export function playAudibleSpeech(text: string) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
@@ -58,10 +59,18 @@ export function playAudibleSpeech(text: string) {
   }
 }
 
+type UseAiSpeechHandlerOptions = {
+  channel: string;
+  onStateDelta?: (delta: IncidentStateDelta) => void;
+  onBotSpeech?: (text: string) => void;
+  isAgoraAudioActive?: boolean;
+};
+
 export function useAiSpeechHandler({
   channel,
   onStateDelta,
   onBotSpeech,
+  isAgoraAudioActive = false,
 }: UseAiSpeechHandlerOptions) {
   const [assistantReply, setAssistantReply] = useState<string | null>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
@@ -73,20 +82,23 @@ export function useAiSpeechHandler({
 
   const onStateDeltaRef = useRef(onStateDelta);
   const onBotSpeechRef = useRef(onBotSpeech);
+  const isAgoraAudioActiveRef = useRef(isAgoraAudioActive);
 
   onStateDeltaRef.current = onStateDelta;
   onBotSpeechRef.current = onBotSpeech;
+  isAgoraAudioActiveRef.current = isAgoraAudioActive;
 
   const processUserSpeech = useCallback(
     async (transcript: string, history: SpeechHistoryItem[] = []) => {
       const normalizedTranscript = transcript.trim();
       if (!normalizedTranscript) return;
 
-      // Abort any in-flight requests
+      // Abort any in-flight requests and stop any running synthesis
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
+      stopAudibleSpeech();
 
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
@@ -117,7 +129,11 @@ export function useAiSpeechHandler({
             'Content-Type': 'application/json',
             Accept: 'application/json',
           },
-          body: JSON.stringify({ transcript: normalizedTranscript, history }),
+          body: JSON.stringify({
+            transcript: normalizedTranscript,
+            history,
+            channelName: channel,
+          }),
           signal: abortController.signal,
         });
 
@@ -144,10 +160,12 @@ export function useAiSpeechHandler({
             setAssistantReply(speechText);
             onBotSpeechRef.current?.(speechText);
 
-            // Speak out loud through user speakers via Web Speech API
-            playAudibleSpeech(speechText);
+            // Single-source audio exclusivity: only use browser SpeechSynthesis if Agora RTC audio is not active
+            if (!isAgoraAudioActiveRef.current) {
+              playAudibleSpeech(speechText);
+            }
 
-            // Forward to Agora TTS audio playback
+            // Forward to Agora TTS audio playback in channel
             void fetch('/api/bot/speak', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -226,7 +244,10 @@ export function useAiSpeechHandler({
 
           if (fullSpeech.trim()) {
             onBotSpeechRef.current?.(fullSpeech.trim());
-            playAudibleSpeech(fullSpeech.trim());
+            // Single-source audio exclusivity: only use browser SpeechSynthesis if Agora RTC audio is not active
+            if (!isAgoraAudioActiveRef.current) {
+              playAudibleSpeech(fullSpeech.trim());
+            }
             void fetch('/api/bot/speak', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -262,6 +283,7 @@ export function useAiSpeechHandler({
   );
 
   const abortPendingSpeech = useCallback(() => {
+    stopAudibleSpeech();
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;

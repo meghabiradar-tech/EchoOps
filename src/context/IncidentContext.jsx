@@ -5,11 +5,14 @@ import { mockIncidentData } from '../data/mockData';
 
 const IncidentContext = createContext(null);
 
-export function IncidentProvider({ children }) {
+export function IncidentProvider({ children, initialChannel = 'echoops-war-room-042' }) {
+  const [channelName, setChannelName] = useState(initialChannel);
+
   // 1. Incident Overview State (holds incidentId, title, summary, severity, status, environment, etc.)
   const [incident, setIncident] = useState({
     ...mockIncidentData.incident,
     incidentId: mockIncidentData.incident.id,
+    channelName: initialChannel,
   });
 
   // 2. Impact Metrics State (holds activeImpact, estRevenueLoss, slaBreachIn, impactedTraffic)
@@ -39,11 +42,75 @@ export function IncidentProvider({ children }) {
   const [transcripts, setTranscripts] = useState(mockIncidentData.voiceStreamMock);
 
   // 6. War Room Metadata
-  const [warRoomId, setWarRoomId] = useState('WAR ROOM #042');
+  const [warRoomId, setWarRoomId] = useState(`WAR ROOM: ${initialChannel}`);
   const [respondersCount, setRespondersCount] = useState(4);
+  const [isRehydrating, setIsRehydrating] = useState(false);
 
   // Cross-tab broadcast channel ref
   const broadcastRef = useRef(null);
+
+  // Re-hydrate state from database on room load / join
+  const rehydrateRoom = useCallback(async (targetChannel) => {
+    const clean = (targetChannel || channelName || 'echoops-war-room-042').trim();
+    setIsRehydrating(true);
+    try {
+      const res = await fetch(`/api/room/${encodeURIComponent(clean)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.incident) {
+          const inc = data.incident;
+          setIncident((prev) => ({
+            ...prev,
+            ...inc,
+            incidentId: inc.id || prev.incidentId,
+            channelName: clean,
+          }));
+          if (Array.isArray(inc.timeline) && inc.timeline.length > 0) {
+            setTimeline(inc.timeline);
+          }
+          if (Array.isArray(inc.facts) && inc.facts.length > 0) {
+            setFacts(inc.facts.map((f) => ({
+              id: f.id,
+              fact: f.statement,
+              verifiedBy: f.verifiedBy,
+              timestamp: f.timestamp,
+              confidence: f.confidence ? 'Confirmed' : 'Unconfirmed',
+            })));
+          }
+          if (Array.isArray(inc.actionItems) && inc.actionItems.length > 0) {
+            setActions(inc.actionItems.map((a) => ({
+              id: a.id,
+              action: a.task,
+              owner: {
+                name: a.owner,
+                role: 'Assigned Responder',
+                initials: a.owner.slice(0, 2).toUpperCase(),
+                color: '#4f46e5',
+                bg: '#eef2ff',
+              },
+              status: (a.status || 'PENDING').toUpperCase(),
+              updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            })));
+          }
+        }
+        if (Array.isArray(data.transcripts) && data.transcripts.length > 0) {
+          setTranscripts(data.transcripts.map((t) => ({
+            speaker: t.speaker,
+            text: t.text,
+            time: t.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          })));
+        }
+      }
+    } catch (err) {
+      console.warn('[EchoOps] Room re-hydration note:', err);
+    } finally {
+      setIsRehydrating(false);
+    }
+  }, [channelName]);
+
+  useEffect(() => {
+    rehydrateRoom(channelName);
+  }, [channelName, rehydrateRoom]);
 
   // Helpers
   const addTranscript = useCallback((entry) => {
@@ -55,11 +122,21 @@ export function IncidentProvider({ children }) {
       time: timeStr,
       text: entry.text,
     };
-    setTranscripts((prev) => [...prev, newEntry].slice(-30));
+    setTranscripts((prev) => [...prev, newEntry].slice(-50));
     try {
       broadcastRef.current?.postMessage({ type: 'ADD_TRANSCRIPT', payload: newEntry });
     } catch {}
-  }, []);
+
+    // Persist to backend database
+    void fetch(`/api/room/${encodeURIComponent(channelName)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'add_transcript',
+        transcript: newEntry,
+      }),
+    }).catch((err) => console.warn('Transcript async persist note:', err));
+  }, [channelName]);
 
   const addTimelineEvent = useCallback((event) => {
     if (!event || !event.title) return;
@@ -303,15 +380,45 @@ export function IncidentProvider({ children }) {
 
     // 14. SRE Incident Commander recommendedAction ({ actionTitle, subtitle, impactAssessment, target })
     if (delta.recommendedAction && typeof delta.recommendedAction === 'object' && delta.recommendedAction.actionTitle) {
+      const rec = delta.recommendedAction;
+      const targetStr = rec.target || 'k8s-prod-useast1';
+      const impactStr = rec.impactAssessment || 'High-priority mitigation command';
+      const actionSubStr = rec.subtitle || `Target: ${targetStr}`;
+
       setHumanInTheLoop({
-        actionTitle: delta.recommendedAction.actionTitle,
-        actionSub: delta.recommendedAction.subtitle || '',
-        consequence: delta.recommendedAction.impactAssessment || '',
-        targetCluster: delta.recommendedAction.target || 'k8s-prod-cluster',
+        actionTitle: rec.actionTitle,
+        actionSub: actionSubStr,
+        consequence: impactStr,
+        impactAssessment: impactStr,
+        targetCluster: targetStr,
+        target: targetStr,
         requiresApprovalBy: 'Incident Commander (Human)',
         riskLevel: delta.severity || 'CRITICAL',
         isConfirmed: false,
         confirmedTime: null,
+      });
+
+      addAction({
+        action: rec.actionTitle,
+        target: targetStr,
+        impactAssessment: impactStr,
+        owner: {
+          name: 'EchoOps Commander',
+          role: 'SRE Engine',
+          initials: 'EO',
+          color: '#4f46e5',
+          bg: '#eef2ff',
+        },
+        status: 'PENDING',
+        updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+
+      addTimelineEvent({
+        title: `Mitigation Staged: ${rec.actionTitle}`,
+        description: `Target: ${targetStr}. ${impactStr}`,
+        source: 'EchoOps AI Commander',
+        type: 'action',
+        badge: 'ACTION STAGED',
       });
     }
   }, [addTimelineEvent, addFact, addAssumption, addAction, updateActionStatus]);
@@ -347,6 +454,10 @@ export function IncidentProvider({ children }) {
   }, [rawApplyStateDelta]);
 
   const value = {
+    channelName,
+    setChannelName,
+    rehydrateRoom,
+    isRehydrating,
     incident,
     setIncident,
     impactMetrics,
@@ -385,6 +496,7 @@ export function IncidentProvider({ children }) {
     resetPendingAction,
     applyStateDelta,
   };
+
 
   return (
     <IncidentContext.Provider value={value}>

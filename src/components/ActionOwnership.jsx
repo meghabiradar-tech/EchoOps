@@ -1,15 +1,17 @@
-'use client';
-
 import React from 'react';
-import { CheckSquare } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { CheckSquare, ExternalLink, ChevronRight } from 'lucide-react';
 import { useIncidentContext } from '../context/IncidentContext';
 
 export default function ActionOwnership(props) {
+  const router = useRouter();
   const context = useIncidentContext();
   const actions = props?.actions || props?.initialActions || context?.actions || [];
+  const channel = context?.channelName || context?.incident?.channelName || 'echoops-war-room-042';
 
   // Cycle status on click: PENDING -> IN PROGRESS -> COMPLETED -> PENDING
-  const handleCycleStatus = (id, currentStatus) => {
+  const handleCycleStatus = (e, id, currentStatus) => {
+    e.stopPropagation();
     let nextStatus = 'IN PROGRESS';
     if (currentStatus === 'PENDING') nextStatus = 'IN PROGRESS';
     else if (currentStatus === 'IN PROGRESS') nextStatus = 'COMPLETED';
@@ -18,6 +20,11 @@ export default function ActionOwnership(props) {
     if (context?.updateActionStatus) {
       context.updateActionStatus(id, nextStatus);
     }
+  };
+
+  const handleOpenActionReview = (actionId) => {
+    const targetUrl = `/room/${encodeURIComponent(channel)}/actions/${encodeURIComponent(actionId)}`;
+    router.push(targetUrl);
   };
 
   const getStatusClass = (status) => {
@@ -41,16 +48,27 @@ export default function ActionOwnership(props) {
           </div>
           <h2 className="card-title">Action & Ownership</h2>
         </div>
-        <span className="card-badge-count" id="actions-count">{actions.length} Assigned Items</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="card-badge-count" id="actions-count">{actions.length} Assigned Items</span>
+        </div>
       </div>
 
       <div className="card-body">
         <div className="actions-list">
           {actions.map((act) => (
-            <div key={act.id} className="action-row-card">
+            <div
+              key={act.id}
+              className="action-row-card"
+              onClick={() => handleOpenActionReview(act.id)}
+              style={{ cursor: 'pointer' }}
+              title="Click to open dedicated mitigation review"
+            >
               {/* Action Description & Owner */}
               <div className="action-main-info">
-                <h3 className="action-title-text">{act.action}</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <h3 className="action-title-text">{act.action}</h3>
+                  <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                </div>
 
                 <div className="action-owner-tag">
                   <div
@@ -65,6 +83,19 @@ export default function ActionOwnership(props) {
                   </div>
                   <span className="owner-name">{act.owner?.name || 'EchoOps Commander'}</span>
                   <span className="owner-role">• {act.owner?.role || 'SRE Engine'}</span>
+                  <span
+                    style={{
+                      fontSize: '0.68rem',
+                      color: '#4f46e5',
+                      marginLeft: '6px',
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '2px',
+                    }}
+                  >
+                    Review <ExternalLink size={10} />
+                  </span>
                 </div>
               </div>
 
@@ -72,7 +103,7 @@ export default function ActionOwnership(props) {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
                 <span
                   className={`status-pill ${getStatusClass(act.status)}`}
-                  onClick={() => handleCycleStatus(act.id, act.status)}
+                  onClick={(e) => handleCycleStatus(e, act.id, act.status)}
                   title="Click to toggle status"
                   id={`action-status-pill-${act.id}`}
                 >
@@ -89,3 +120,4 @@ export default function ActionOwnership(props) {
     </div>
   );
 }
+

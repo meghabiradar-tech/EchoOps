@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Radio, Mic, Users, Activity } from 'lucide-react';
+import { Radio, Mic, Users, Activity, ExternalLink } from 'lucide-react';
 import { useIncidentContext } from '../context/IncidentContext';
 
 export default function Header({ rightSlot } = {}) {
@@ -65,11 +65,33 @@ export default function Header({ rightSlot } = {}) {
             <span>Duration: <strong>{formatTimer(elapsedSeconds)}</strong></span>
           </div>
 
-          {/* LIVE Status Indicator */}
-          <div className="live-status-pill" id="live-indicator">
-            <span className="pulse-dot"></span>
-            <span>{incident.status || 'LIVE'}</span>
-          </div>
+          {/* Join War Room in New Tab */}
+          <a
+            href={`/room/${encodeURIComponent(incident?.channel || 'echoops-war-room-042')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="header-war-room-btn"
+            id="header-open-war-room"
+            title="Open Dedicated Voice War Room in a New Tab"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 13px',
+              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+              color: '#ffffff',
+              borderRadius: '8px',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              textDecoration: 'none',
+              boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <Radio size={13} />
+            <span>Join Voice Room</span>
+            <ExternalLink size={12} style={{ opacity: 0.8 }} />
+          </a>
 
           {rightSlot}
         </div>

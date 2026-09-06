@@ -113,3 +113,15 @@ CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);
 CREATE INDEX IF NOT EXISTS idx_actions_incident_id ON actions(incident_id);
 CREATE INDEX IF NOT EXISTS idx_timeline_incident_id ON timeline_events(incident_id);
 CREATE INDEX IF NOT EXISTS idx_past_incidents_scenario ON past_incidents(scenario);
+
+-- Transcripts Table (for voice and chat history per channel/incident)
+CREATE TABLE IF NOT EXISTS transcripts (
+    id VARCHAR(64) PRIMARY KEY,
+    incident_id VARCHAR(64) REFERENCES incidents(id) ON DELETE CASCADE,
+    channel_name VARCHAR(128) NOT NULL,
+    speaker VARCHAR(128) NOT NULL,
+    text TEXT NOT NULL,
+    time VARCHAR(32),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_transcripts_channel ON transcripts(channel_name);

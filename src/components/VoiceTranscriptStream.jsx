@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Volume2, Mic, MicOff, Bot, Send, Sparkles, VolumeX, Radio } from 'lucide-react';
 import { useIncidentContext } from '../context/IncidentContext';
-import { playAudibleSpeech } from '@/hooks/useAiSpeechHandler';
+import { playAudibleSpeech, stopAudibleSpeech } from '@/hooks/useAiSpeechHandler';
 
 const PRESET_COMMANDS = [
   {
@@ -24,6 +24,16 @@ const PRESET_COMMANDS = [
   },
 ];
 
+function isUserSpeaker(speaker) {
+  const s = (speaker || '').toLowerCase();
+  return (
+    s.includes('operator') ||
+    s.includes('you') ||
+    s.includes('human') ||
+    s.includes('user')
+  );
+}
+
 export default function VoiceTranscriptStream(props) {
   const context = useIncidentContext();
   const rawTranscripts = props?.transcripts || context?.transcripts;
@@ -36,16 +46,47 @@ export default function VoiceTranscriptStream(props) {
   const [interimText, setInterimText] = useState('');
   const [isBotSpeaking, setIsBotSpeaking] = useState(false);
   const [audioMuted, setAudioMuted] = useState(false);
+  const [filterRole, setFilterRole] = useState('ALL');
 
   const recognitionRef = useRef(null);
   const silenceTimerRef = useRef(null);
   const processingRef = useRef(false);
 
   useEffect(() => {
+    if (audioMuted) {
+      stopAudibleSpeech();
+      setIsBotSpeaking(false);
+    }
+  }, [audioMuted]);
+
+  const filteredTranscripts = useMemo(() => {
+    if (filterRole === 'ALL') return transcripts;
+    if (filterRole === 'AI') {
+      return transcripts.filter((t) => !isUserSpeaker(t.speaker) && !(t.speaker || '').toLowerCase().includes('alert'));
+    }
+    if (filterRole === 'ENGINEER') {
+      return transcripts.filter((t) => isUserSpeaker(t.speaker));
+    }
+    if (filterRole === 'SYSTEM') {
+      return transcripts.filter((t) => (t.speaker || '').toLowerCase().includes('alert') || (t.text || '').toLowerCase().includes('p99') || (t.text || '').toLowerCase().includes('rollback') || (t.text || '').toLowerCase().includes('cpu'));
+    }
+    return transcripts;
+  }, [transcripts, filterRole]);
+
+  const counts = useMemo(() => {
+    return {
+      all: transcripts.length,
+      ai: transcripts.filter((t) => !isUserSpeaker(t.speaker) && !(t.speaker || '').toLowerCase().includes('alert')).length,
+      engineers: transcripts.filter((t) => isUserSpeaker(t.speaker)).length,
+      system: transcripts.filter((t) => (t.speaker || '').toLowerCase().includes('alert') || (t.text || '').toLowerCase().includes('p99') || (t.text || '').toLowerCase().includes('rollback') || (t.text || '').toLowerCase().includes('cpu')).length,
+    };
+  }, [transcripts]);
+
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [transcripts.length, interimText]);
+  }, [filteredTranscripts.length, interimText]);
 
   // Submit utterance to Voice AI Copilot
   const submitUtterance = useCallback(
@@ -240,16 +281,6 @@ export default function VoiceTranscriptStream(props) {
     submitUtterance(cmd);
   };
 
-  const isUserSpeaker = (speaker) => {
-    const s = (speaker || '').toLowerCase();
-    return (
-      s.includes('operator') ||
-      s.includes('you') ||
-      s.includes('human') ||
-      s.includes('user')
-    );
-  };
-
   return (
     <div className="card" aria-label="Voice AI Live Audio Stream">
       <div className="card-header" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -435,6 +466,88 @@ export default function VoiceTranscriptStream(props) {
           </div>
         )}
 
+        {/* Quick-Filter Chips Bar */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            marginBottom: '0.65rem',
+            overflowX: 'auto',
+            paddingBottom: '2px',
+          }}
+          aria-label="Filter transcript by speaker"
+        >
+          <button
+            type="button"
+            onClick={() => setFilterRole('ALL')}
+            style={{
+              padding: '3px 9px',
+              borderRadius: '6px',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              border: filterRole === 'ALL' ? '1px solid #4f46e5' : '1px solid #e2e8f0',
+              background: filterRole === 'ALL' ? '#4f46e5' : '#f8fafc',
+              color: filterRole === 'ALL' ? '#ffffff' : '#64748b',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            All ({counts.all})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterRole('AI')}
+            style={{
+              padding: '3px 9px',
+              borderRadius: '6px',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              border: filterRole === 'AI' ? '1px solid #7c3aed' : '1px solid #e2e8f0',
+              background: filterRole === 'AI' ? '#7c3aed' : '#f8fafc',
+              color: filterRole === 'AI' ? '#ffffff' : '#64748b',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            AI Commander ({counts.ai})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterRole('ENGINEER')}
+            style={{
+              padding: '3px 9px',
+              borderRadius: '6px',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              border: filterRole === 'ENGINEER' ? '1px solid #2563eb' : '1px solid #e2e8f0',
+              background: filterRole === 'ENGINEER' ? '#2563eb' : '#f8fafc',
+              color: filterRole === 'ENGINEER' ? '#ffffff' : '#64748b',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            Engineers ({counts.engineers})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterRole('SYSTEM')}
+            style={{
+              padding: '3px 9px',
+              borderRadius: '6px',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              border: filterRole === 'SYSTEM' ? '1px solid #d97706' : '1px solid #e2e8f0',
+              background: filterRole === 'SYSTEM' ? '#d97706' : '#f8fafc',
+              color: filterRole === 'SYSTEM' ? '#ffffff' : '#64748b',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            System Alerts ({counts.system})
+          </button>
+        </div>
+
         {/* Audio Turns Scroll Area */}
         <div
           className="voice-transcript-card"
@@ -442,12 +555,14 @@ export default function VoiceTranscriptStream(props) {
           style={{ maxHeight: '280px', overflowY: 'auto' }}
           id="voice-transcript-container"
         >
-          {transcripts.length === 0 ? (
+          {filteredTranscripts.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8', fontSize: '0.85rem' }}>
-              Awaiting audio input on voice bridge...
+              {transcripts.length === 0
+                ? 'Awaiting audio input on voice bridge...'
+                : `No turns found for "${filterRole}".`}
             </div>
           ) : (
-            transcripts.map((t, idx) => {
+            filteredTranscripts.map((t, idx) => {
               const isUser = isUserSpeaker(t.speaker);
               return (
                 <div
