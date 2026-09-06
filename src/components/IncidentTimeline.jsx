@@ -76,15 +76,15 @@ export default function IncidentTimeline(props) {
                 <div className="timeline-content-card">
                   <div className="timeline-meta-row">
                     <span className="timeline-time-badge">{item.time}</span>
-                    <span className="timeline-tag">{item.badge}</span>
+                    <span className="timeline-tag">{item.badge || (item.category ? item.category.toUpperCase() : 'UPDATE')}</span>
                   </div>
 
-                  <h3 className="timeline-event-title">{item.title}</h3>
-                  <p className="timeline-event-desc">{item.description}</p>
+                  <h3 className="timeline-event-title">{item.title || item.note || item.category || 'Incident Event'}</h3>
+                  <p className="timeline-event-desc">{item.description || item.note || ''}</p>
 
                   <div className="timeline-source-pill">
                     <span>Source:</span>
-                    <strong style={{ color: '#334155' }}>{item.source}</strong>
+                    <strong style={{ color: '#334155' }}>{item.source || item.speaker || 'EchoOps Voice AI'}</strong>
                   </div>
                 </div>
               </div>

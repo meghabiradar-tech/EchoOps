@@ -58,20 +58,20 @@ export default function ActiveIncidentCard(props) {
   const channelName = incident.channelName || incident.channel || 'echoops-war-room-042';
 
   const activeImpact =
-    metrics.activeImpact || incident.activeImpact || incident.impact || '74% Checkout Transactions Failing';
+    metrics.activeImpact || incident.activeImpact || incident.impact || 'Active telemetry threshold breach';
   const estRevenueLoss =
-    metrics.estRevenueLoss || incident.estRevenueLoss || incident.estimatedRevenueImpact || '$42,000 / hr';
+    metrics.estRevenueLoss || incident.estRevenueLoss || incident.estimatedRevenueImpact || '$0 / hr';
   const slaBreachIn =
-    metrics.slaBreachIn || incident.slaBreachIn || incident.slaTimeRemaining || '12m 45s';
+    metrics.slaBreachIn || incident.slaBreachIn || incident.slaTimeRemaining || (status === 'resolved' ? 'Mitigated' : 'Active Triage');
   const impactedTraffic =
-    metrics.impactedTraffic || incident.impactedTraffic || metrics.impactedCustomers || incident.impactedCustomers || '1,420 Users Affected';
+    metrics.impactedTraffic || incident.impactedTraffic || metrics.impactedCustomers || incident.impactedCustomers || 'Monitoring sessions';
 
   const isSev1 =
     String(severity).toUpperCase().includes('1') ||
     String(severity).toUpperCase() === 'CRITICAL' ||
     String(severity).toUpperCase() === 'HIGH';
 
-  const slaColorState = getSlaSeverity(slaBreachIn);
+  const slaColorState = status === 'resolved' ? 'neutral' : getSlaSeverity(slaBreachIn);
 
   return (
     <section
@@ -193,7 +193,9 @@ export default function ActiveIncidentCard(props) {
               </span>
             )}
           </div>
-          <span className="cell-footnote">Checkout failure rate exceeded 5% SLA</span>
+          <span className="cell-footnote">
+            {incident.impactFootnote || (status === 'resolved' ? 'System restored to normal operating envelope' : isSev1 ? 'Active telemetry threshold exceeded SLA' : 'Service degradation detected')}
+          </span>
         </div>
 
         {/* 2. Est Revenue Loss */}
@@ -211,7 +213,9 @@ export default function ActiveIncidentCard(props) {
               </span>
             )}
           </div>
-          <span className="cell-footnote">Calculated on transaction checkout velocity</span>
+          <span className="cell-footnote">
+            {incident.revenueFootnote || (status === 'resolved' ? 'No financial loss accruing' : 'Calculated on active business velocity')}
+          </span>
         </div>
 
         {/* 3. SLA Breach In (Transitions dynamically: Neutral -> Warning Amber -> Urgent Red) */}
@@ -247,7 +251,9 @@ export default function ActiveIncidentCard(props) {
               </span>
             )}
           </div>
-          <span className="cell-footnote">Sev-1 MTTR breach target: under 30m</span>
+          <span className="cell-footnote">
+            {incident.slaFootnote || (status === 'resolved' ? 'MTTR target satisfied & verified' : isSev1 ? 'Sev-1 MTTR breach target: under 30m' : 'Target MTTR resolution window: under 60m')}
+          </span>
         </div>
 
         {/* 4. Impacted Traffic */}
@@ -265,7 +271,9 @@ export default function ActiveIncidentCard(props) {
               </span>
             )}
           </div>
-          <span className="cell-footnote">Active customer sessions experiencing timeouts</span>
+          <span className="cell-footnote">
+            {incident.trafficFootnote || (status === 'resolved' ? 'All customer sessions processing normally' : 'Active customer sessions experiencing degradation')}
+          </span>
         </div>
       </div>
     </section>

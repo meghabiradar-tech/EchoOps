@@ -33,24 +33,24 @@ export default function AssumptionsCard(props) {
               <div className="assumption-header-row">
                 <span className="unconfirmed-badge">
                   <AlertCircle size={12} strokeWidth={2.5} />
-                  {a.status}
+                  {a.status || 'UNVERIFIED'}
                 </span>
                 <span
                   style={{
                     fontSize: '0.7rem',
                     fontWeight: '700',
-                    color: a.riskLevel === 'High' ? '#dc2626' : a.riskLevel === 'Medium' ? '#d97706' : '#16a34a',
+                    color: (a.riskLevel || a.risk) === 'High' ? '#dc2626' : (a.riskLevel || a.risk) === 'Medium' ? '#d97706' : '#16a34a',
                   }}
                 >
-                  Risk: {a.riskLevel}
+                  Risk: {a.riskLevel || a.risk || 'Medium'}
                 </span>
               </div>
 
-              <p className="assumption-text">{a.hypothesis}</p>
+              <p className="assumption-text">{a.hypothesis || a.statement}</p>
 
               <div className="assumption-footer-row">
                 <span>
-                  Source: <strong style={{ color: '#475569' }}>{a.source}</strong>
+                  Source: <strong style={{ color: '#475569' }}>{a.source || a.raisedBy || 'Voice Bridge Triage'}</strong>
                 </span>
               </div>
             </div>

@@ -20,12 +20,17 @@ import {
   Copy,
   Check,
   RefreshCw,
+  LayoutDashboard,
 } from 'lucide-react';
 import type { IncidentRoomSummary, StoredTranscriptEntry } from '@/lib/db/models';
 
 type FilterTab = 'ALL' | 'ACTIVE' | 'RESOLVED' | 'SEV1';
 
-export function IncidentRoomsDirectory() {
+export interface IncidentRoomsDirectoryProps {
+  onSelectIncident?: (channelName: string) => void;
+}
+
+export function IncidentRoomsDirectory({ onSelectIncident }: IncidentRoomsDirectoryProps = {}) {
   const router = useRouter();
   const [rooms, setRooms] = useState<IncidentRoomSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -492,12 +497,28 @@ export function IncidentRoomsDirectory() {
                   <div className="flex flex-wrap lg:flex-col items-center lg:items-end gap-2 shrink-0">
                     <button
                       type="button"
-                      onClick={() => handleRejoinRoom(room.channelName, true)}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-xs font-bold text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-105 active:scale-95"
+                      onClick={() => {
+                        if (onSelectIncident) {
+                          onSelectIncident(room.channelName);
+                        } else {
+                          router.push(`/?channel=${encodeURIComponent(room.channelName)}`);
+                        }
+                      }}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow-md shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95"
+                      title="Load incident, previous history, and live telemetry into Cockpit"
                     >
-                      <Radio size={13} />
-                      <span>{isLive ? 'Rejoin War Room' : 'Open Archived Room'}</span>
-                      <ExternalLink size={12} className="opacity-80" />
+                      <LayoutDashboard size={13} />
+                      <span>Open in Cockpit</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRejoinRoom(room.channelName, true)}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 shadow transition-all hover:scale-105 active:scale-95"
+                    >
+                      <Radio size={13} className="text-indigo-400" />
+                      <span>{isLive ? 'Voice Room' : 'Archived Voice'}</span>
+                      <ExternalLink size={12} className="opacity-60" />
                     </button>
 
                     <div className="flex items-center gap-2">

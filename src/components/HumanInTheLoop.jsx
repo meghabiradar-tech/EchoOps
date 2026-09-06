@@ -7,13 +7,14 @@ import { useIncidentContext } from '../context/IncidentContext';
 export default function HumanInTheLoop(props) {
   const context = useIncidentContext();
   const hitlData = props?.hitlData || context?.pendingAction || context?.humanInTheLoop || {};
+  const incident = context?.incident || {};
   const isConfirmed = hitlData.isConfirmed || false;
   const confirmedTime = hitlData.confirmedTime || null;
 
-  const actionTitle = hitlData.actionTitle || 'Restart Payment Service Pods';
-  const subtitle = hitlData.subtitle || hitlData.actionSub || 'Rolling restart across payment-service-prod cluster';
-  const impactAssessment = hitlData.impactAssessment || hitlData.consequence || 'Will drop active in-flight checkout connections for 4-7 seconds during pod rotation.';
-  const target = hitlData.target || hitlData.targetCluster || 'k8s-prod-useast1';
+  const actionTitle = hitlData.actionTitle || (incident.service ? `Drain & Recycle ${incident.service} Workers` : 'Mitigation Action Pending Confirmation');
+  const subtitle = hitlData.subtitle || hitlData.actionSub || 'Cluster Worker Node Reset & Ingress Route Validation';
+  const impactAssessment = hitlData.impactAssessment || hitlData.consequence || 'Will recycle unhealthy worker threads; in-flight requests will gracefully drain with zero data loss.';
+  const target = hitlData.target || hitlData.targetCluster || (incident.environment ? `${incident.environment.toLowerCase().replace(/[^a-z0-9]/g, '-')}-cluster` : 'production-cluster');
 
   const handleConfirm = () => {
     if (context?.confirmPendingAction) {

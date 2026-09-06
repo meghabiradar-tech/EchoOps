@@ -115,6 +115,9 @@ export default function VoiceTranscriptStream(props) {
           },
           body: JSON.stringify({
             transcript: cleanText,
+            channelName: context?.channelName || 'echoops-war-room-042',
+            serviceName: context?.incident?.service,
+            region: context?.incident?.environment,
             history: (transcripts || []).slice(-4).map((t) => ({
               role: t.speaker.includes('You') ? 'user' : 'assistant',
               content: t.text,

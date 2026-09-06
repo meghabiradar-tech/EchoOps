@@ -54,6 +54,9 @@ export function IncidentProvider({ children, initialChannel = 'echoops-war-room-
   const rehydrateRoom = useCallback(async (targetChannel) => {
     const clean = (targetChannel || channelName || 'echoops-war-room-042').trim();
     setIsRehydrating(true);
+    setChannelName(clean);
+    setWarRoomId(`WAR ROOM: #${clean}`);
+
     try {
       const res = await fetch(`/api/room/${encodeURIComponent(clean)}`);
       if (res.ok) {
@@ -66,51 +69,121 @@ export function IncidentProvider({ children, initialChannel = 'echoops-war-room-
             incidentId: inc.id || prev.incidentId,
             channelName: clean,
           }));
+
+          // 1. Sync real-time dynamic impact metrics
+          setImpactMetrics({
+            activeImpact: inc.activeImpact || inc.impact || 'Telemetry monitoring active',
+            estRevenueLoss: inc.estRevenueLoss || inc.estimatedRevenueImpact || '$0 / hr',
+            slaBreachIn: inc.slaBreachIn || inc.slaTimeRemaining || 'Active Triage',
+            impactedTraffic: inc.impactedTraffic || inc.impactedCustomers || 'Monitoring sessions',
+            impactedCustomers: inc.impactedCustomers || inc.impactedTraffic || 'Monitoring sessions',
+          });
+
+          // 2. Sync timeline events
           if (Array.isArray(inc.timeline) && inc.timeline.length > 0) {
-            setTimeline(inc.timeline);
+            setTimeline(
+              inc.timeline.map((t, idx) => ({
+                id: t.id || `tl-${idx}`,
+                time: t.time || 'Recent',
+                title: t.title || t.note || t.category || 'Incident Event',
+                description: t.description || t.note || '',
+                source: t.source || t.speaker || 'EchoOps Voice AI',
+                type: t.type || 'system',
+                badge: t.badge || (t.category ? t.category.toUpperCase() : 'UPDATE'),
+              })),
+            );
           }
+
+          // 3. Sync confirmed facts
           if (Array.isArray(inc.facts) && inc.facts.length > 0) {
-            setFacts(inc.facts.map((f) => ({
-              id: f.id,
-              fact: f.statement,
-              verifiedBy: f.verifiedBy,
-              timestamp: f.timestamp,
-              confidence: f.confidence ? 'Confirmed' : 'Unconfirmed',
-            })));
+            setFacts(
+              inc.facts.map((f, idx) => ({
+                id: f.id || `fact-${idx}`,
+                fact: f.statement || f.fact,
+                verifiedBy: f.verifiedBy || 'Telemetry',
+                timestamp: f.timestamp || 'Recent',
+                confidence: f.confidence ? 'Confirmed' : 'Unconfirmed',
+              })),
+            );
           }
+
+          // 4. Sync hypotheses / assumptions
+          if (Array.isArray(inc.hypotheses) && inc.hypotheses.length > 0) {
+            setAssumptions(
+              inc.hypotheses.map((h, idx) => ({
+                id: h.id || `hyp-${idx}`,
+                hypothesis: h.statement || h.hypothesis,
+                source: h.raisedBy || h.source || 'Voice Bridge Triage',
+                status: (h.status || 'unverified').toUpperCase(),
+                riskLevel: h.risk || h.riskLevel || 'Medium',
+              })),
+            );
+          }
+
+          // 5. Sync assigned actions
           if (Array.isArray(inc.actionItems) && inc.actionItems.length > 0) {
-            setActions(inc.actionItems.map((a) => ({
-              id: a.id,
-              action: a.task,
-              owner: {
-                name: a.owner,
-                role: 'Assigned Responder',
-                initials: a.owner.slice(0, 2).toUpperCase(),
-                color: '#4f46e5',
-                bg: '#eef2ff',
-              },
-              status: (a.status || 'PENDING').toUpperCase(),
-              updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            })));
+            setActions(
+              inc.actionItems.map((a, idx) => ({
+                id: a.id || `act-${idx}`,
+                action: a.task || a.action,
+                owner:
+                  typeof a.owner === 'object' && a.owner
+                    ? a.owner
+                    : {
+                        name: a.owner || 'Assigned Responder',
+                        role: 'Assigned Responder',
+                        initials: (a.owner || 'AR').slice(0, 2).toUpperCase(),
+                        color: '#4f46e5',
+                        bg: '#eef2ff',
+                      },
+                status: (a.status || 'PENDING').toUpperCase(),
+                updatedAt: a.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              })),
+            );
+          }
+
+          // 6. Sync active alerts
+          if (inc.alerts && typeof inc.alerts === 'object') {
+            setAlerts(inc.alerts);
+          }
+
+          // 7. Sync Human-In-The-Loop Governance
+          if (inc.pendingAction && typeof inc.pendingAction === 'object') {
+            setHumanInTheLoop({
+              actionTitle: inc.pendingAction.actionTitle || 'Mitigation Action Pending Confirmation',
+              actionSub: inc.pendingAction.actionSub || 'Awaiting Commander authorization',
+              targetCluster: inc.pendingAction.targetCluster || inc.pendingAction.target || 'production-cluster',
+              consequence: inc.pendingAction.consequence || inc.pendingAction.impactAssessment || 'Will execute automated remediation',
+              requiresApprovalBy: inc.pendingAction.requiresApprovalBy || 'Incident Commander (Human)',
+              riskLevel: inc.pendingAction.riskLevel || 'CRITICAL RECOVERY',
+              isConfirmed: Boolean(inc.pendingAction.isConfirmed),
+              confirmedTime: inc.pendingAction.confirmedTime || null,
+            });
           }
         }
+
+        // 8. Sync historical transcripts
         if (Array.isArray(data.transcripts) && data.transcripts.length > 0) {
-          setTranscripts(data.transcripts.map((t) => ({
-            speaker: t.speaker,
-            text: t.text,
-            time: t.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          })));
+          setTranscripts(
+            data.transcripts.map((t) => ({
+              speaker: t.speaker,
+              text: t.text,
+              time: t.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            })),
+          );
         } else if (typeof window !== 'undefined') {
           try {
             const localSaved = window.localStorage.getItem(`echoops_room_transcripts_${clean}`);
             if (localSaved) {
               const parsed = JSON.parse(localSaved);
               if (Array.isArray(parsed) && parsed.length > 0) {
-                setTranscripts(parsed.map((p) => ({
-                  speaker: p.speaker || (String(p.uid) === '0' ? 'You (Human Operator)' : 'EchoOps AI Commander'),
-                  text: p.text,
-                  time: p.createdAt ? new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
-                })));
+                setTranscripts(
+                  parsed.map((p) => ({
+                    speaker: p.speaker || (String(p.uid) === '0' ? 'You (Human Operator)' : 'EchoOps AI Commander'),
+                    text: p.text,
+                    time: p.createdAt ? new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
+                  })),
+                );
               }
             }
           } catch {}
@@ -122,6 +195,17 @@ export function IncidentProvider({ children, initialChannel = 'echoops-war-room-
       setIsRehydrating(false);
     }
   }, [channelName]);
+
+  const switchIncident = useCallback(
+    async (targetChannel) => {
+      if (!targetChannel) return;
+      const clean = targetChannel.trim();
+      setChannelName(clean);
+      setWarRoomId(`WAR ROOM: #${clean}`);
+      await rehydrateRoom(clean);
+    },
+    [rehydrateRoom],
+  );
 
   useEffect(() => {
     rehydrateRoom(channelName);
@@ -597,6 +681,7 @@ export function IncidentProvider({ children, initialChannel = 'echoops-war-room-
   const value = {
     channelName,
     setChannelName,
+    switchIncident,
     rehydrateRoom,
     isRehydrating,
     incident,

@@ -8,29 +8,32 @@ export default function AlertsSection(props) {
   const context = useIncidentContext();
   const alerts = props?.alerts || context?.alerts || {};
 
-  const conflict = alerts.conflict || {
-    title: 'Deployment vs Rollback Divergence',
-    description: 'Service mesh route rules diverged between canary v2.14.2 and baseline v2.14.0.',
-    impact: 'Stuck connection pool slots on Payment Gateway',
-    time: '14:24:10',
+  const incident = context?.incident || {};
+  const isResolved = (incident.status || '').toLowerCase() === 'resolved';
+
+  const conflict = alerts?.conflict || (isResolved ? null : {
+    title: `${incident.service || 'Service'} Configuration Divergence`,
+    description: `Discrepancy detected in active deployment routing under current incident conditions.`,
+    impact: `Potential routing latency across ${incident.environment || 'production'}`,
+    time: 'Recent',
     badge: 'Conflict Alert',
-  };
+  });
 
-  const gap = alerts.gap || {
-    title: 'Missing Primary On-Call Responder',
-    description: 'No active SRE ack on Redis cluster alert despite latency crossing 1,800ms threshold.',
-    impact: 'Elevated checkout failure cascading to user cart sessions',
-    time: '14:25:02',
+  const gap = alerts?.gap || (isResolved ? null : {
+    title: 'Incident Telemetry Coverage Gap',
+    description: 'Awaiting secondary APM metric stream validation from the audio bridge.',
+    impact: 'Elevated triage validation latency',
+    time: 'Recent',
     badge: 'Gap Alert',
-  };
+  });
 
-  const risk = alerts.risk || {
-    title: 'Projected SLA Breach in < 12 Minutes',
-    description: 'Four-nines availability SLA at risk if 504 gateway timeouts persist at current 74% error rate.',
-    impact: 'Tier-1 contractual customer penalty ($50K+)',
-    time: '14:26:45',
+  const risk = alerts?.risk || (isResolved ? null : {
+    title: `${incident.severity || 'Sev-1'} SLA Mitigation Watch`,
+    description: `Incident requires verified mitigation within target window to prevent SLA breach.`,
+    impact: `Business reliability SLA for ${incident.service || 'core services'}`,
+    time: 'Active',
     badge: 'Risk Alert',
-  };
+  });
 
   const totalAlerts = [conflict, gap, risk].filter(Boolean).length;
 

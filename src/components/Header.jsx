@@ -13,8 +13,10 @@ import {
   Bot,
   Copy,
   Check,
+  Layers,
 } from 'lucide-react';
 import { useIncidentContext } from '../context/IncidentContext';
+import IncidentSelectorDropdown from '@/components/IncidentSelectorDropdown';
 
 export default function Header({
   viewMode = 'dashboard',
@@ -29,7 +31,7 @@ export default function Header({
   const incident = context?.incident || {};
   const respondersCount = context?.respondersCount || 4;
   const channelName =
-    propChannelName || incident?.channelName || incident?.channel || 'echoops-war-room-042';
+    propChannelName || incident?.channelName || incident?.channel || context?.channelName || 'echoops-war-room-042';
 
   const [elapsedSeconds, setElapsedSeconds] = useState(876); // 14m 36s initial
   const [copied, setCopied] = useState(false);
@@ -62,6 +64,7 @@ export default function Header({
 
   // Determine active view mode label
   const isCockpitActive = viewMode === 'dashboard' || viewMode === 'cockpit';
+  const isIncidentsActive = viewMode === 'incidents' || viewMode === 'rooms';
   const isConsoleActive = viewMode === 'console';
   const isTimelineActive = viewMode === 'timeline';
 
@@ -69,7 +72,7 @@ export default function Header({
     <header className="dashboard-header" role="banner">
       <div className="header-inner">
         {/* ========================================================
-            1. LEFT COLUMN: Identity & Dynamic War Room Tag
+            1. LEFT COLUMN: Identity & Interactive Incident Selector
             ======================================================== */}
         <div className="header-zone-left">
           <div className="header-brand-group">
@@ -90,11 +93,27 @@ export default function Header({
             </div>
           </div>
 
-          {/* Dynamic War Room Tag with 1-Click Copy */}
+          {/* Interactive Incident Selector Dropdown (Browse & Switch Incidents) */}
+          <IncidentSelectorDropdown
+            currentChannel={channelName}
+            onSelectIncident={(targetChannel) => {
+              if (context?.switchIncident) {
+                context.switchIncident(targetChannel);
+              }
+              if (onSelectViewMode && (viewMode === 'incidents' || viewMode === 'rooms')) {
+                onSelectViewMode('dashboard');
+              }
+            }}
+            onOpenDirectory={() => {
+              if (onSelectViewMode) onSelectViewMode('incidents');
+            }}
+          />
+
+          {/* 1-Click Copy Channel Pill */}
           <button
             type="button"
             onClick={handleCopyChannel}
-            className="header-channel-pill group"
+            className="header-channel-pill group hidden lg:inline-flex"
             title={`Click to copy channel: #${channelName}`}
             id="header-channel-scope"
           >
@@ -159,7 +178,7 @@ export default function Header({
             3. RIGHT COLUMN: View Switcher & Single Primary War Room Button
             ======================================================== */}
         <div className="header-zone-right">
-          {/* View Switcher: Cockpit | SRE Console | Timeline */}
+          {/* View Switcher: Cockpit | Incidents | SRE Console | Timeline */}
           {onSelectViewMode ? (
             <div className="header-segmented-tabs" role="tablist" aria-label="Dashboard View Modes">
               <button
@@ -173,6 +192,19 @@ export default function Header({
               >
                 <LayoutDashboard size={13} />
                 <span>Cockpit</span>
+              </button>
+
+              <button
+                type="button"
+                role="tab"
+                aria-selected={isIncidentsActive}
+                onClick={() => onSelectViewMode('incidents')}
+                className={`segment-btn ${isIncidentsActive ? 'active' : ''}`}
+                id="tab-view-incidents"
+                title="All Incident Rooms & History"
+              >
+                <Layers size={13} />
+                <span>Incidents</span>
               </button>
 
               <button

@@ -11,6 +11,7 @@ import AlertsSection from './components/AlertsSection';
 import HumanInTheLoop from './components/HumanInTheLoop';
 import VoiceTranscriptStream from './components/VoiceTranscriptStream';
 import { IncidentProvider, useIncidentContext } from './context/IncidentContext';
+import { IncidentRoomsDirectory } from '@/components/IncidentRoomsDirectory';
 import './App.css';
 
 function DashboardContent({
@@ -24,6 +25,8 @@ function DashboardContent({
   isStopping,
   channelName,
 } = {}) {
+  const context = useIncidentContext();
+
   return (
     <div className="app-layout">
       {/* 1. HEADER with EchoOps, Voice AI Commander, and LIVE status */}
@@ -37,12 +40,24 @@ function DashboardContent({
         rightSlot={headerRightSlot}
       />
 
-      <main className="dashboard-container">
-        {/* Voice Commander War Room Slot (when active or prompt) */}
-        {voiceSlot}
+      {viewMode === 'incidents' || viewMode === 'rooms' ? (
+        <div style={{ padding: '1.5rem', maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
+          <IncidentRoomsDirectory
+            onSelectIncident={(selectedChannel) => {
+              if (context?.switchIncident) {
+                context.switchIncident(selectedChannel);
+              }
+              if (onSelectViewMode) onSelectViewMode('dashboard');
+            }}
+          />
+        </div>
+      ) : (
+        <main className="dashboard-container">
+          {/* Voice Commander War Room Slot (when active or prompt) */}
+          {voiceSlot}
 
-        {/* 2. ACTIVE INCIDENT HERO: Dynamic overview, severity, status & metrics */}
-        <ActiveIncidentCard />
+          {/* 2. ACTIVE INCIDENT HERO: Dynamic overview, severity, status & metrics */}
+          <ActiveIncidentCard />
 
         {/* 2-Column Responsive Dashboard Layout */}
         <div className="dashboard-grid">
@@ -74,6 +89,7 @@ function DashboardContent({
           </div>
         </div>
       </main>
+      )}
     </div>
   );
 }

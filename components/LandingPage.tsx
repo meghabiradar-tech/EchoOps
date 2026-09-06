@@ -22,6 +22,9 @@ import type {
 import { ErrorBoundary } from './ErrorBoundary';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import IncidentDashboard from '../src/App';
+import Header from '../src/components/Header';
+import { IncidentRoomsDirectory } from './IncidentRoomsDirectory';
+import { useIncidentContext } from '../src/context/IncidentContext';
 
 // Dynamically import the ConversationComponent with ssr disabled
 const ConversationComponent = dynamic(() => import('./ConversationComponent'), {
@@ -59,7 +62,7 @@ const AgoraProvider = dynamic(
   { ssr: false },
 );
 
-type ViewMode = 'dashboard' | 'cockpit' | 'console' | 'timeline' | 'split';
+type ViewMode = 'dashboard' | 'cockpit' | 'console' | 'timeline' | 'split' | 'incidents' | 'rooms';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -72,6 +75,14 @@ export default function LandingPage() {
   const [rtmClient, setRtmClient] = useState<RTMClient | null>(null);
   const [agentJoinError, setAgentJoinError] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+
+  const context = useIncidentContext();
+
+  useEffect(() => {
+    if (context?.channelName && context.channelName !== channelName) {
+      setChannelName(context.channelName);
+    }
+  }, [context?.channelName, channelName]);
 
   // Dedicated Room Tab Opener
   const handleOpenDedicatedRoom = useCallback(
@@ -498,6 +509,31 @@ export default function LandingPage() {
               {activeConversationView}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 1b. ALL INCIDENTS DIRECTORY VIEW */}
+      {(viewMode === 'incidents' || viewMode === 'rooms') && (
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#090d16' }}>
+          <Header
+            viewMode={viewMode}
+            onSelectViewMode={(mode) => setViewMode(mode as ViewMode)}
+            showConversation={showConversation}
+            onEndConversation={handleEndConversation}
+            isStopping={isStopping}
+            channelName={channelName}
+          />
+          <div style={{ padding: '1.5rem', maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
+            <IncidentRoomsDirectory
+              onSelectIncident={(selectedChannel) => {
+                setChannelName(selectedChannel);
+                if (context?.switchIncident) {
+                  context.switchIncident(selectedChannel);
+                }
+                setViewMode('dashboard');
+              }}
+            />
+          </div>
         </div>
       )}
 

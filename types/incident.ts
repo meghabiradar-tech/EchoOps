@@ -102,6 +102,11 @@ export type IncidentTimelineEvent = {
   category: TimelineEventCategory;
   note: string;
   metadata?: Record<string, unknown>;
+  title?: string;
+  description?: string;
+  badge?: string;
+  type?: 'alert' | 'error' | 'system' | 'warning' | 'action';
+  source?: string;
 };
 
 export type IntegrationType = 'slack' | 'jira' | 'pagerduty' | 'monitoring' | 'sms_email';
@@ -136,6 +141,31 @@ export type IncidentState = {
   integrationLogs: IntegrationLog[];
   unresolvedRisks: string[];
   summary?: string;
+  environment?: string;
+  service?: string;
+  commander?: string;
+  activeImpact?: string;
+  estRevenueLoss?: string;
+  slaBreachIn?: string;
+  impactedTraffic?: string;
+  impactedCustomers?: string;
+  alerts?: {
+    conflict?: { title: string; description: string; impact: string; time: string; badge: string; severity?: string };
+    gap?: { title: string; description: string; impact: string; time: string; badge: string; severity?: string };
+    risk?: { title: string; description: string; impact: string; time: string; badge: string; severity?: string };
+  };
+  pendingAction?: {
+    actionTitle: string;
+    actionSub?: string;
+    targetCluster?: string;
+    target?: string;
+    consequence?: string;
+    impactAssessment?: string;
+    requiresApprovalBy?: string;
+    riskLevel?: string;
+    isConfirmed?: boolean;
+    confirmedTime?: string | null;
+  };
 };
 
 export type PastIncidentKnowledge = {

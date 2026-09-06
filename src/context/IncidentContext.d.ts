@@ -140,6 +140,7 @@ export interface StateDelta {
 export interface IncidentContextValue {
   channelName: string;
   setChannelName: React.Dispatch<React.SetStateAction<string>>;
+  switchIncident: (targetChannel: string) => Promise<void>;
   rehydrateRoom: (targetChannel?: string) => Promise<void>;
   isRehydrating: boolean;
   incident: IncidentOverview;

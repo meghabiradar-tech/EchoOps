@@ -66,7 +66,7 @@ export default function ActionOwnership(props) {
               {/* Action Description & Owner */}
               <div className="action-main-info">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <h3 className="action-title-text">{act.action}</h3>
+                  <h3 className="action-title-text">{act.action || act.task}</h3>
                   <ChevronRight size={14} className="text-slate-400 shrink-0" />
                 </div>
 
@@ -74,15 +74,21 @@ export default function ActionOwnership(props) {
                   <div
                     className="owner-avatar"
                     style={{
-                      backgroundColor: act.owner?.bg || '#eef2ff',
-                      color: act.owner?.color || '#4f46e5',
+                      backgroundColor: (typeof act.owner === 'object' && act.owner?.bg) || '#eef2ff',
+                      color: (typeof act.owner === 'object' && act.owner?.color) || '#4f46e5',
                     }}
-                    title={act.owner?.role || 'Responder'}
+                    title={typeof act.owner === 'object' ? (act.owner?.role || 'Responder') : act.owner}
                   >
-                    {act.owner?.initials || 'EO'}
+                    {typeof act.owner === 'object'
+                      ? (act.owner?.initials || 'EO')
+                      : (act.owner ? String(act.owner).slice(0, 2).toUpperCase() : 'EO')}
                   </div>
-                  <span className="owner-name">{act.owner?.name || 'EchoOps Commander'}</span>
-                  <span className="owner-role">• {act.owner?.role || 'SRE Engine'}</span>
+                  <span className="owner-name">
+                    {typeof act.owner === 'object' ? (act.owner?.name || 'EchoOps Commander') : (act.owner || 'EchoOps Commander')}
+                  </span>
+                  <span className="owner-role">
+                    • {typeof act.owner === 'object' ? (act.owner?.role || 'SRE Engine') : 'Assigned Responder'}
+                  </span>
                   <span
                     style={{
                       fontSize: '0.68rem',

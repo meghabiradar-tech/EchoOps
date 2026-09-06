@@ -40,11 +40,11 @@ export default function FactsCard(props) {
                 </span>
               </div>
 
-              <p className="fact-text">{f.fact}</p>
+              <p className="fact-text">{f.fact || f.statement}</p>
 
               <div className="fact-footer-row">
                 <span>
-                  Verified via: <strong style={{ color: '#475569' }}>{f.verifiedBy}</strong>
+                  Verified via: <strong style={{ color: '#475569' }}>{f.verifiedBy || 'Telemetry APM'}</strong>
                 </span>
               </div>
             </div>
