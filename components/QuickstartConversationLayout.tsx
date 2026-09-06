@@ -24,51 +24,60 @@ export function QuickstartConversationLayout({
   isEnding,
 }: QuickstartConversationLayoutProps) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col text-left">
-      <header className="flex shrink-0 flex-col gap-4 border-b border-border px-4 py-4 md:h-[76px] md:flex-row md:items-center md:justify-between md:px-6 md:py-0">
+    <div className="flex min-h-0 flex-1 flex-col text-left bg-[#090d16]">
+      <header className="flex shrink-0 flex-col gap-3 border-b border-[#1e293b] bg-[#0d1322] px-4 py-3 md:h-[70px] md:flex-row md:items-center md:justify-between md:px-6 md:py-0">
         <div className="flex min-w-0 items-center gap-3">
-          <Image
-            src="/agora-logo-mark.svg"
-            alt="Agora"
-            width={40}
-            height={40}
-            className="h-10 w-10 shrink-0 object-contain"
-          />
-          <div className="flex min-w-0 flex-col justify-center gap-1">
-            <span className="truncate text-lg font-semibold leading-none tracking-[-0.025em] text-foreground">
-              Agora Conversational AI
-            </span>
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
+            <Image
+              src="/agora-logo-mark.svg"
+              alt="Agora"
+              width={26}
+              height={26}
+              className="h-6 w-6 object-contain"
+            />
+          </div>
+          <div className="flex min-w-0 flex-col justify-center gap-0.5">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-sm font-bold text-white font-mono tracking-tight">
+                EchoOps AI Commander Voice Bridge
+              </span>
+              <span className="hidden sm:inline-flex px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-800/60">
+                SD-RTN
+              </span>
+            </div>
             {pipelineMetrics}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 md:pr-1">
+        <div className="flex items-center gap-2.5 md:pr-1">
           {statusPanel}
           <Button
             variant="destructive"
             size="sm"
-            className="h-8 rounded-md border border-destructive bg-transparent px-3 text-xs font-medium text-destructive hover:bg-destructive/10"
+            className="h-8 rounded-lg border border-red-500/40 bg-red-600/90 hover:bg-red-500 px-3 text-xs font-bold text-white shadow-sm transition-colors"
             onClick={onEndConversation}
             aria-label="End conversation with AI agent"
             title="End conversation"
             disabled={isEnding}
           >
-            {isEnding ? 'Ending...' : 'End Conversation'}
+            {isEnding ? 'Ending...' : 'End Call'}
           </Button>
         </div>
       </header>
 
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-4 pb-4 pt-4 md:px-6 lg:flex-row lg:gap-0">
-        <aside className="order-2 h-64 min-h-0 w-full shrink-0 lg:order-1 lg:h-full lg:w-[26rem]">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 p-4 md:p-5 lg:flex-row lg:gap-5">
+        {/* Transcript / Chat Room Panel (Generous 32rem-36rem width on desktop) */}
+        <aside className="order-2 flex-1 min-h-[360px] w-full shrink-0 lg:order-1 lg:h-full lg:w-[32rem] xl:w-[36rem] lg:flex-none">
           {transcriptPanel}
         </aside>
 
-        <main className="order-1 flex min-h-0 flex-1 flex-col lg:order-2 lg:border-l lg:border-border/80 lg:pl-6">
-          <div className="flex min-h-0 flex-1 flex-col pb-2 pt-3 md:pb-6">
+        {/* Visualizer & Audio Dock Main Area */}
+        <main className="order-1 flex min-h-0 flex-1 flex-col lg:order-2 rounded-xl border border-[#1e293b] bg-[#0d1322]/60 p-4 shadow-inner">
+          <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex min-h-0 flex-1 items-center justify-center">
               {visualizer}
             </div>
-            <div className="shrink-0 pt-4">{controls}</div>
+            <div className="shrink-0 pt-4 border-t border-[#1e293b]/60">{controls}</div>
           </div>
         </main>
       </div>

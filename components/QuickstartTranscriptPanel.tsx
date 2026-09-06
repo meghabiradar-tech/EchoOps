@@ -1,6 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import {
+  Bot,
+  User,
+  AlertTriangle,
+  Copy,
+  Check,
+  ChevronDown,
+  Sparkles,
+  Shield,
+  Filter,
+} from 'lucide-react';
 
 type TranscriptMessage = {
   turn_id?: string | number;
@@ -18,10 +29,18 @@ type QuickstartTranscriptPanelProps = {
 };
 
 function formatMessageTime(createdAt?: number) {
-  if (!createdAt) return null;
+  if (!createdAt) {
+    const now = new Date();
+    return new Intl.DateTimeFormat(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(now);
+  }
   return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
+    hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
   }).format(new Date(createdAt));
 }
 
@@ -33,6 +52,8 @@ export function QuickstartTranscriptPanel({
   isAssistantProcessing = false,
 }: QuickstartTranscriptPanelProps) {
   const [filterRole, setFilterRole] = useState<'ALL' | 'AI' | 'ENGINEER' | 'SYSTEM'>('ALL');
+  const [copiedTurnId, setCopiedTurnId] = useState<string | number | null>(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const rawMessages = useMemo(
@@ -66,17 +87,42 @@ export function QuickstartTranscriptPanel({
     if (filterRole === 'SYSTEM') {
       return allMessagesWithReply.filter((m) => {
         const t = (m.text || '').toLowerCase();
-        return t.includes('alert') || t.includes('rollback') || t.includes('p99') || t.includes('system') || t.includes('cpu');
+        return (
+          t.includes('alert') ||
+          t.includes('rollback') ||
+          t.includes('p99') ||
+          t.includes('system') ||
+          t.includes('cpu') ||
+          t.includes('database')
+        );
       });
     }
     return allMessagesWithReply;
   }, [allMessagesWithReply, filterRole, agentUID]);
 
+  const scrollToBottom = useCallback(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' });
+    setShowScrollBottom(false);
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    const isNearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+    setShowScrollBottom(!isNearBottom);
+  }, []);
+
   useEffect(() => {
     const node = scrollRef.current;
     if (!node) return;
-    node.scrollTop = node.scrollHeight;
-  }, [filteredMessages]);
+    // Auto-scroll if close to bottom
+    const isNearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 120;
+    if (isNearBottom) {
+      node.scrollTop = node.scrollHeight;
+    }
+  }, [filteredMessages.length, assistantReply, isAssistantProcessing]);
 
   const counts = useMemo(() => {
     return {
@@ -85,116 +131,207 @@ export function QuickstartTranscriptPanel({
       engineers: allMessagesWithReply.filter((m) => String(m.uid) !== agentUID).length,
       system: allMessagesWithReply.filter((m) => {
         const t = (m.text || '').toLowerCase();
-        return t.includes('alert') || t.includes('rollback') || t.includes('p99') || t.includes('system') || t.includes('cpu');
+        return (
+          t.includes('alert') ||
+          t.includes('rollback') ||
+          t.includes('p99') ||
+          t.includes('system') ||
+          t.includes('cpu') ||
+          t.includes('database')
+        );
       }).length,
     };
   }, [allMessagesWithReply, agentUID]);
 
+  const copyTurnText = (id: string | number, text?: string) => {
+    if (!text || typeof navigator === 'undefined') return;
+    navigator.clipboard.writeText(text);
+    setCopiedTurnId(id);
+    setTimeout(() => setCopiedTurnId(null), 1800);
+  };
+
   return (
     <section
-      className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-border bg-card/20"
-      aria-label="Transcription panel"
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border border-[#1e293b] bg-[#090d16] shadow-2xl relative"
+      aria-label="War Room Live Transcript"
     >
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">Transcript</h2>
-          <p className="text-xs text-muted-foreground">Live voice turns</p>
+      {/* Header Bar */}
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#1e293b] bg-[#0d1322] px-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/25 text-indigo-400">
+            <Bot size={15} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-100 font-mono">
+                War Room Transcript
+              </h2>
+              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium">Real-Time Voice & SRE Telemetry</p>
+          </div>
         </div>
-        <span className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-xs font-mono text-muted-foreground">
-          {filteredMessages.length} turns
-        </span>
+
+        <div className="flex items-center gap-2">
+          <span className="rounded-md border border-[#1e293b] bg-[#151d30] px-2.5 py-1 text-[11px] font-mono font-semibold text-slate-300">
+            {filteredMessages.length} Turns
+          </span>
+        </div>
       </div>
 
-      {/* Quick-Filter Chips */}
-      <div className="flex items-center gap-1.5 border-b border-border/60 bg-muted/20 px-3 py-2 overflow-x-auto text-[11px]">
+      {/* Role Filter Tabs */}
+      <div className="flex items-center gap-1.5 border-b border-[#1e293b] bg-[#0b101c] px-3 py-2 overflow-x-auto text-[11px] shrink-0">
         <button
           type="button"
           onClick={() => setFilterRole('ALL')}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium transition-all ${
             filterRole === 'ALL'
-              ? 'bg-primary text-primary-foreground shadow-sm'
-              : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+              ? 'bg-indigo-600 text-white font-semibold shadow-[0_0_10px_rgba(79,70,229,0.4)] border border-indigo-400/40'
+              : 'bg-[#151d30] text-slate-400 border border-[#1e293b] hover:text-slate-200 hover:border-slate-700'
           }`}
         >
+          <Filter size={11} />
           <span>All</span>
-          <span className="opacity-75 text-[10px]">({counts.all})</span>
+          <span className="opacity-80 text-[10px] font-mono">({counts.all})</span>
         </button>
+
         <button
           type="button"
           onClick={() => setFilterRole('AI')}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium transition-all ${
             filterRole === 'AI'
-              ? 'bg-purple-600 text-white shadow-sm'
-              : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+              ? 'bg-purple-600 text-white font-semibold shadow-[0_0_10px_rgba(147,51,234,0.4)] border border-purple-400/40'
+              : 'bg-[#151d30] text-slate-400 border border-[#1e293b] hover:text-purple-300 hover:border-purple-800/60'
           }`}
         >
+          <Bot size={11} />
           <span>AI Commander</span>
-          <span className="opacity-75 text-[10px]">({counts.ai})</span>
+          <span className="opacity-80 text-[10px] font-mono">({counts.ai})</span>
         </button>
+
         <button
           type="button"
           onClick={() => setFilterRole('ENGINEER')}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium transition-all ${
             filterRole === 'ENGINEER'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+              ? 'bg-blue-600 text-white font-semibold shadow-[0_0_10px_rgba(37,99,235,0.4)] border border-blue-400/40'
+              : 'bg-[#151d30] text-slate-400 border border-[#1e293b] hover:text-blue-300 hover:border-blue-800/60'
           }`}
         >
-          <span>Engineers</span>
-          <span className="opacity-75 text-[10px]">({counts.engineers})</span>
+          <User size={11} />
+          <span>Responders</span>
+          <span className="opacity-80 text-[10px] font-mono">({counts.engineers})</span>
         </button>
+
         <button
           type="button"
           onClick={() => setFilterRole('SYSTEM')}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium transition-all ${
             filterRole === 'SYSTEM'
-              ? 'bg-amber-600 text-white shadow-sm'
-              : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+              ? 'bg-amber-600 text-white font-semibold shadow-[0_0_10px_rgba(217,119,6,0.4)] border border-amber-400/40'
+              : 'bg-[#151d30] text-slate-400 border border-[#1e293b] hover:text-amber-300 hover:border-amber-800/60'
           }`}
         >
-          <span>System Alerts</span>
-          <span className="opacity-75 text-[10px]">({counts.system})</span>
+          <AlertTriangle size={11} />
+          <span>Alerts</span>
+          <span className="opacity-80 text-[10px] font-mono">({counts.system})</span>
         </button>
       </div>
 
+      {/* Messages Stream Body */}
       <div
         ref={scrollRef}
-        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4"
+        onScroll={handleScroll}
+        className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-4 bg-[#090d16]"
       >
         {filteredMessages.length === 0 && !assistantReply && !isAssistantProcessing ? (
-          <div className="flex h-full flex-col items-center justify-center text-center p-6 space-y-2 text-muted-foreground">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary mb-1">
-              <span className="relative flex h-3 w-3">
+          <div className="flex h-full flex-col items-center justify-center text-center p-8 text-slate-400 space-y-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#151d30] border border-[#1e293b] text-indigo-400 shadow-inner">
+              <span className="relative flex h-4 w-4">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500" />
               </span>
             </div>
-            <p className="text-xs font-semibold text-foreground">Listening for Voice & Telemetry</p>
-            <p className="text-[11px] max-w-[220px] text-muted-foreground leading-relaxed">
-              Speak into your microphone or trigger runbook actions to stream live incident turns.
-            </p>
+            <div>
+              <p className="text-xs font-bold text-slate-200">Listening to War Room Audio</p>
+              <p className="text-[11px] max-w-[240px] text-slate-400 leading-relaxed mt-1">
+                Speak into your mic or trigger runbook diagnostics to stream live turns.
+              </p>
+            </div>
           </div>
         ) : (
           filteredMessages.map((message, index) => {
             const isAgent = String(message.uid) === agentUID;
-            const label = isAgent ? 'EchoOps AI Commander' : `Engineer (${message.uid})`;
-            const text = message.text?.trim();
+            const isSystem =
+              (message.text || '').toLowerCase().includes('alert') ||
+              (message.text || '').toLowerCase().includes('database connection pool') ||
+              (message.text || '').toLowerCase().includes('p99');
+            const turnKey = message.turn_id ?? `${message.uid}-${index}`;
             const time = formatMessageTime(message.createdAt);
+            const text = message.text?.trim() || '';
 
             return (
               <article
-                key={`${message.turn_id ?? message.uid}-${index}`}
-                className={`flex flex-col ${isAgent ? 'items-start' : 'items-end'}`}
+                key={turnKey}
+                className={`group relative flex flex-col rounded-xl border transition-all ${
+                  isAgent
+                    ? 'border-purple-500/30 bg-[#0f1426] shadow-[0_2px_12px_rgba(147,51,234,0.06)]'
+                    : isSystem
+                    ? 'border-amber-500/30 bg-[#161210] shadow-[0_2px_12px_rgba(245,158,11,0.06)]'
+                    : 'border-blue-500/30 bg-[#0b162c] shadow-[0_2px_12px_rgba(59,130,246,0.06)]'
+                } p-3`}
               >
-                <div className="mb-1 flex items-center gap-2 px-1 text-xs font-semibold text-muted-foreground">
-                  <span className={isAgent ? 'text-purple-400' : 'text-blue-400'}>{label}</span>
-                  {time && <span className="font-normal">{time}</span>}
+                {/* Message Header */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`flex h-5 w-5 items-center justify-center rounded-md text-[10px] ${
+                        isAgent
+                          ? 'bg-purple-900/60 text-purple-300 border border-purple-500/40'
+                          : isSystem
+                          ? 'bg-amber-900/60 text-amber-300 border border-amber-500/40'
+                          : 'bg-blue-900/60 text-blue-300 border border-blue-500/40'
+                      }`}
+                    >
+                      {isAgent ? <Bot size={12} /> : isSystem ? <Shield size={12} /> : <User size={12} />}
+                    </div>
+                    <span
+                      className={`text-xs font-bold font-mono tracking-tight ${
+                        isAgent ? 'text-purple-300' : isSystem ? 'text-amber-300' : 'text-blue-300'
+                      }`}
+                    >
+                      {isAgent ? 'EchoOps AI Commander' : isSystem ? 'System Telemetry' : 'Incident Responder'}
+                    </span>
+                    <span
+                      className={`text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase font-mono ${
+                        isAgent
+                          ? 'bg-purple-950/80 text-purple-400 border border-purple-800/60'
+                          : isSystem
+                          ? 'bg-amber-950/80 text-amber-400 border border-amber-800/60'
+                          : 'bg-blue-950/80 text-blue-400 border border-blue-800/60'
+                      }`}
+                    >
+                      {isAgent ? 'AI COPILOT' : isSystem ? 'AUTOMATION' : 'HUMAN'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500">
+                    <span>{time}</span>
+                    <button
+                      type="button"
+                      onClick={() => copyTurnText(turnKey, text)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      title="Copy transcript turn"
+                    >
+                      {copiedTurnId === turnKey ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                    </button>
+                  </div>
                 </div>
+
+                {/* Message Content */}
                 <div
-                  className={`max-w-full whitespace-pre-wrap rounded-xl border px-3 py-2 text-sm leading-6 ${
-                    isAgent
-                      ? 'border-purple-500/20 bg-purple-950/20 text-purple-100 shadow-sm'
-                      : 'border-blue-500/20 bg-blue-950/20 text-blue-100 shadow-sm'
+                  className={`text-[12.5px] leading-relaxed whitespace-pre-wrap font-sans ${
+                    isAgent ? 'text-slate-100' : isSystem ? 'text-amber-100' : 'text-slate-200'
                   }`}
                 >
                   {text || '...'}
@@ -203,12 +340,27 @@ export function QuickstartTranscriptPanel({
             );
           })
         )}
+
+        {/* Processing Indicator */}
         {isAssistantProcessing && (
-          <div className="self-start rounded-xl border border-purple-500/30 bg-purple-950/30 px-3 py-2 text-sm text-purple-200 animate-pulse">
-            EchoOps AI is triaging incident...
+          <div className="flex items-center gap-2.5 rounded-xl border border-purple-500/40 bg-[#12162a] p-3 text-xs text-purple-200 shadow-md">
+            <Sparkles size={14} className="text-purple-400 animate-spin" />
+            <span className="font-medium">EchoOps AI Commander is evaluating incident metrics & runbook...</span>
           </div>
         )}
       </div>
+
+      {/* Jump to bottom floating button */}
+      {showScrollBottom && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="absolute bottom-4 right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-600 text-white text-xs font-semibold shadow-lg hover:bg-indigo-500 border border-indigo-400/40 transition-all animate-bounce"
+        >
+          <ChevronDown size={13} />
+          <span>Latest turns</span>
+        </button>
+      )}
     </section>
   );
 }

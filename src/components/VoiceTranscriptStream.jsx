@@ -1,9 +1,22 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Volume2, Mic, MicOff, Bot, Send, Sparkles, VolumeX, Radio } from 'lucide-react';
+import {
+  Volume2,
+  Mic,
+  MicOff,
+  Bot,
+  User,
+  Send,
+  Sparkles,
+  VolumeX,
+  Radio,
+  Shield,
+  Filter,
+  AlertTriangle,
+} from 'lucide-react';
 import { useIncidentContext } from '../context/IncidentContext';
-import { playAudibleSpeech, stopAudibleSpeech } from '@/hooks/useAiSpeechHandler';
+import { voiceArbiter } from '@/lib/voiceArbiter';
 
 const PRESET_COMMANDS = [
   {
@@ -30,7 +43,8 @@ function isUserSpeaker(speaker) {
     s.includes('operator') ||
     s.includes('you') ||
     s.includes('human') ||
-    s.includes('user')
+    s.includes('user') ||
+    s.includes('responder')
   );
 }
 
@@ -52,9 +66,16 @@ export default function VoiceTranscriptStream(props) {
   const silenceTimerRef = useRef(null);
   const processingRef = useRef(false);
 
+  // Synchronize speech state with VoiceArbiter
+  useEffect(() => {
+    return voiceArbiter.addListener((speaking) => {
+      setIsBotSpeaking(speaking);
+    });
+  }, []);
+
   useEffect(() => {
     if (audioMuted) {
-      stopAudibleSpeech();
+      voiceArbiter.stop();
       setIsBotSpeaking(false);
     }
   }, [audioMuted]);
@@ -62,13 +83,22 @@ export default function VoiceTranscriptStream(props) {
   const filteredTranscripts = useMemo(() => {
     if (filterRole === 'ALL') return transcripts;
     if (filterRole === 'AI') {
-      return transcripts.filter((t) => !isUserSpeaker(t.speaker) && !(t.speaker || '').toLowerCase().includes('alert'));
+      return transcripts.filter(
+        (t) => !isUserSpeaker(t.speaker) && !(t.speaker || '').toLowerCase().includes('alert'),
+      );
     }
     if (filterRole === 'ENGINEER') {
       return transcripts.filter((t) => isUserSpeaker(t.speaker));
     }
     if (filterRole === 'SYSTEM') {
-      return transcripts.filter((t) => (t.speaker || '').toLowerCase().includes('alert') || (t.text || '').toLowerCase().includes('p99') || (t.text || '').toLowerCase().includes('rollback') || (t.text || '').toLowerCase().includes('cpu'));
+      return transcripts.filter(
+        (t) =>
+          (t.speaker || '').toLowerCase().includes('alert') ||
+          (t.text || '').toLowerCase().includes('p99') ||
+          (t.text || '').toLowerCase().includes('rollback') ||
+          (t.text || '').toLowerCase().includes('cpu') ||
+          (t.text || '').toLowerCase().includes('database'),
+      );
     }
     return transcripts;
   }, [transcripts, filterRole]);
@@ -76,9 +106,18 @@ export default function VoiceTranscriptStream(props) {
   const counts = useMemo(() => {
     return {
       all: transcripts.length,
-      ai: transcripts.filter((t) => !isUserSpeaker(t.speaker) && !(t.speaker || '').toLowerCase().includes('alert')).length,
+      ai: transcripts.filter(
+        (t) => !isUserSpeaker(t.speaker) && !(t.speaker || '').toLowerCase().includes('alert'),
+      ).length,
       engineers: transcripts.filter((t) => isUserSpeaker(t.speaker)).length,
-      system: transcripts.filter((t) => (t.speaker || '').toLowerCase().includes('alert') || (t.text || '').toLowerCase().includes('p99') || (t.text || '').toLowerCase().includes('rollback') || (t.text || '').toLowerCase().includes('cpu')).length,
+      system: transcripts.filter(
+        (t) =>
+          (t.speaker || '').toLowerCase().includes('alert') ||
+          (t.text || '').toLowerCase().includes('p99') ||
+          (t.text || '').toLowerCase().includes('rollback') ||
+          (t.text || '').toLowerCase().includes('cpu') ||
+          (t.text || '').toLowerCase().includes('database'),
+      ).length,
     };
   }, [transcripts]);
 
@@ -93,6 +132,9 @@ export default function VoiceTranscriptStream(props) {
     async (textToSubmit) => {
       const cleanText = (textToSubmit || '').trim();
       if (!cleanText || processingRef.current) return;
+
+      // Immediately halt any current speech before processing new user turn
+      voiceArbiter.stop();
 
       processingRef.current = true;
       setIsProcessing(true);
@@ -119,7 +161,7 @@ export default function VoiceTranscriptStream(props) {
             serviceName: context?.incident?.service,
             region: context?.incident?.environment,
             history: (transcripts || []).slice(-4).map((t) => ({
-              role: t.speaker.includes('You') ? 'user' : 'assistant',
+              role: isUserSpeaker(t.speaker) ? 'user' : 'assistant',
               content: t.text,
             })),
           }),
@@ -146,12 +188,12 @@ export default function VoiceTranscriptStream(props) {
         }
 
         // 4. Speak response OUT LOUD via browser speech synthesis
+        // Single-voice guarantee: voiceArbiter suppresses speech if Agora SD-RTN is active
         if (speech && !audioMuted) {
-          playAudibleSpeech(
-            speech,
-            () => setIsBotSpeaking(true),
-            () => setIsBotSpeaking(false),
-          );
+          voiceArbiter.speak(speech, {
+            onStart: () => setIsBotSpeaking(true),
+            onEnd: () => setIsBotSpeaking(false),
+          });
         }
       } catch (err) {
         console.error('[EchoOps] Failed to process voice command:', err);
@@ -171,14 +213,21 @@ export default function VoiceTranscriptStream(props) {
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Speech Recognition is not supported in this browser. Please use Chrome, Safari, or Edge, or use the command input bar below.');
+      alert(
+        'Speech Recognition is not supported in this browser. Please use Chrome, Safari, or Edge, or use the command input bar below.',
+      );
       return;
     }
 
     try {
       if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch {}
+        try {
+          recognitionRef.current.stop();
+        } catch {}
       }
+
+      // Stop any active bot speech when user begins listening
+      voiceArbiter.stop();
 
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
@@ -187,48 +236,43 @@ export default function VoiceTranscriptStream(props) {
 
       recognition.onstart = () => {
         setIsListening(true);
+        setInterimText('');
       };
 
       recognition.onresult = (event) => {
         let interim = '';
-        let final = '';
+        let finalTranscript = '';
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const res = event.results[i];
-          if (res.isFinal) {
-            final += res[0].transcript;
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const item = event.results[i];
+          if (item.isFinal) {
+            finalTranscript += item[0].transcript;
           } else {
-            interim += res[0].transcript;
+            interim += item[0].transcript;
           }
         }
 
         if (interim) {
           setInterimText(interim);
-        }
-
-        if (final.trim()) {
-          const captured = final.trim();
-          setInterimText('');
-          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-          submitUtterance(captured);
-        } else if (interim.trim()) {
-          // Pause-based detection
           if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
           silenceTimerRef.current = setTimeout(() => {
-            const captured = interim.trim();
-            if (captured) {
+            if (interim.trim().length > 3) {
+              submitUtterance(interim.trim());
               setInterimText('');
-              submitUtterance(captured);
             }
-          }, 1400);
+          }, 1200);
+        }
+
+        if (finalTranscript.trim()) {
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          submitUtterance(finalTranscript.trim());
+          setInterimText('');
         }
       };
 
-      recognition.onerror = (event) => {
-        console.warn('[EchoOps] SpeechRecognition note:', event?.error);
-        if (event.error === 'not-allowed') {
-          alert('Microphone access was blocked. Please enable microphone permissions in your browser settings.');
-          setIsListening(false);
+      recognition.onerror = (e) => {
+        if (e.error !== 'no-speech' && e.error !== 'aborted') {
+          console.warn('[EchoOps] Speech recognition notice:', e.error);
         }
       };
 
@@ -236,10 +280,10 @@ export default function VoiceTranscriptStream(props) {
         setIsListening(false);
       };
 
-      recognition.start();
       recognitionRef.current = recognition;
+      recognition.start();
     } catch (err) {
-      console.error('[EchoOps] SpeechRecognition init failed:', err);
+      console.warn('[EchoOps] Could not initialize SpeechRecognition:', err);
       setIsListening(false);
     }
   }, [submitUtterance]);
@@ -266,8 +310,12 @@ export default function VoiceTranscriptStream(props) {
 
   const handleTestVoiceAudio = () => {
     const testPhrase =
-      'EchoOps AI Incident Commander audio bridge active. Real-time speech synthesis and dashboard telemetry online.';
-    playAudibleSpeech(testPhrase);
+      'EchoOps AI Incident Commander audio bridge active. Real-time telemetry online.';
+    voiceArbiter.speak(testPhrase, {
+      onStart: () => setIsBotSpeaking(true),
+      onEnd: () => setIsBotSpeaking(false),
+      force: true,
+    });
     if (context?.addTranscript) {
       context.addTranscript({
         speaker: 'EchoOps AI Commander',
@@ -285,130 +333,102 @@ export default function VoiceTranscriptStream(props) {
   };
 
   return (
-    <div className="card" aria-label="Voice AI Live Audio Stream">
-      <div className="card-header" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
-        <div className="card-title-group">
+    <div
+      className="rounded-xl border border-[#1e293b] bg-[#0d1322] shadow-xl overflow-hidden"
+      aria-label="Voice AI Live Audio Stream"
+    >
+      {/* Card Header */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1e293b] bg-[#0b101c] px-4 py-3">
+        <div className="flex items-center gap-3">
           <div
-            className="card-icon-badge"
-            style={{
-              background: isBotSpeaking ? '#f5d0fe' : '#ede9fe',
-              color: isBotSpeaking ? '#c026d3' : '#7c3aed',
-              transition: 'all 0.2s ease',
-            }}
+            className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-all ${
+              isBotSpeaking
+                ? 'bg-fuchsia-950/60 border-fuchsia-500/50 text-fuchsia-400 shadow-[0_0_12px_rgba(217,70,239,0.4)]'
+                : 'bg-indigo-950/60 border-indigo-500/30 text-indigo-400'
+            }`}
           >
-            <Volume2 size={18} />
+            <Volume2 size={16} className={isBotSpeaking ? 'animate-bounce' : ''} />
           </div>
           <div>
-            <h2 className="card-title">Live Audio Stream Synthesis</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-100 font-mono">
+                Live Voice AI Stream
+              </h2>
               <span
-                style={{
-                  fontSize: '0.68rem',
-                  fontWeight: 600,
-                  color: isBotSpeaking ? '#c026d3' : '#6d28d9',
-                }}
-              >
-                {isBotSpeaking ? 'AI Commander Speaking Out Loud...' : isListening ? 'Listening to Mic...' : 'Voice AI Engine Online'}
+                className={`h-2 w-2 rounded-full ${
+                  isBotSpeaking
+                    ? 'bg-fuchsia-400 animate-ping'
+                    : isListening
+                    ? 'bg-red-400 animate-pulse'
+                    : 'bg-emerald-400'
+                }`}
+              />
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-medium">
+              <span className={isBotSpeaking ? 'text-fuchsia-400' : isListening ? 'text-blue-400' : 'text-slate-400'}>
+                {isBotSpeaking
+                  ? 'AI Commander Speaking Out Loud...'
+                  : isListening
+                  ? 'Listening to Microphone...'
+                  : 'Voice AI Bridge Online'}
               </span>
-              {isBotSpeaking && (
-                <span className="pulse-dot" style={{ background: '#c026d3', width: '6px', height: '6px' }} />
-              )}
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div className="flex items-center gap-2">
+          {/* Mute Toggle */}
           <button
+            type="button"
             onClick={() => setAudioMuted((prev) => !prev)}
             title={audioMuted ? 'Unmute voice synthesis' : 'Mute voice synthesis'}
-            style={{
-              padding: '4px 8px',
-              borderRadius: '6px',
-              border: '1px solid #e2e8f0',
-              background: audioMuted ? '#fee2e2' : '#f8fafc',
-              color: audioMuted ? '#b91c1c' : '#475569',
-              fontSize: '0.72rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all ${
+              audioMuted
+                ? 'bg-red-950/60 border-red-800/60 text-red-300 hover:bg-red-900/60'
+                : 'bg-[#151d30] border-[#1e293b] text-slate-300 hover:text-white hover:border-slate-700'
+            }`}
           >
-            {audioMuted ? <VolumeX size={12} /> : <Volume2 size={12} />}
-            <span>{audioMuted ? 'Muted' : 'Sound On'}</span>
+            {audioMuted ? <VolumeX size={13} className="text-red-400" /> : <Volume2 size={13} className="text-indigo-400" />}
+            <span>{audioMuted ? 'Muted' : 'Audio On'}</span>
           </button>
 
+          {/* Test Audio Button */}
           <button
+            type="button"
             onClick={handleTestVoiceAudio}
-            title="Play sample AI Commander voice audio test"
-            style={{
-              padding: '4px 9px',
-              borderRadius: '6px',
-              border: '1px solid #c7d2fe',
-              background: '#eef2ff',
-              color: '#4f46e5',
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
+            title="Play sample AI Commander voice test"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border border-indigo-500/30 bg-indigo-950/40 text-indigo-300 hover:bg-indigo-900/60 hover:text-white transition-all"
           >
             <Radio size={12} />
             <span>Test Audio</span>
           </button>
 
-          <span
-            className="card-badge-count"
-            style={{ background: '#ede9fe', color: '#6d28d9', borderColor: '#ddd6fe' }}
-            id="transcript-stream-count"
-          >
+          {/* Turns Badge */}
+          <span className="rounded-md border border-[#1e293b] bg-[#151d30] px-2.5 py-1 text-[11px] font-mono font-semibold text-slate-300">
             {transcripts.length} Turns
           </span>
         </div>
       </div>
 
-      <div className="card-body" style={{ padding: '0.85rem 1.15rem' }}>
+      <div className="p-4 space-y-3">
         {/* Live Microphone Call-to-Action Bar */}
         <div
-          style={{
-            marginBottom: '0.85rem',
-            padding: '0.75rem',
-            background: isListening
-              ? 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)'
-              : '#f8fafc',
-            border: isListening ? '1px solid #93c5fd' : '1px solid #e2e8f0',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '0.75rem',
-          }}
+          className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-all ${
+            isListening
+              ? 'bg-[#1c131a] border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
+              : 'bg-[#131b2e] border-[#1e293b]'
+          }`}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: 1 }}>
+          <div className="flex items-center gap-3 flex-1">
             <button
+              type="button"
               onClick={toggleListening}
               id="dashboard-mic-toggle"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '7px 14px',
-                borderRadius: '8px',
-                border: 'none',
-                fontWeight: 600,
-                fontSize: '0.78rem',
-                cursor: 'pointer',
-                background: isListening
-                  ? '#ef4444'
-                  : 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                color: '#ffffff',
-                boxShadow: isListening
-                  ? '0 0 12px rgba(239, 68, 68, 0.4)'
-                  : '0 2px 8px rgba(79, 70, 229, 0.25)',
-                transition: 'all 0.2s ease',
-              }}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold text-white transition-all ${
+                isListening
+                  ? 'bg-red-600 hover:bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.5)]'
+                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-md'
+              }`}
             >
               {isListening ? (
                 <>
@@ -423,143 +443,92 @@ export default function VoiceTranscriptStream(props) {
               )}
             </button>
 
-            <div style={{ fontSize: '0.74rem', color: '#475569' }}>
+            <div className="text-xs text-slate-300">
               {isListening ? (
-                <span style={{ fontWeight: 600, color: '#1d4ed8' }}>
-                  🎙️ Speak into microphone... pausing 1s dispatches command
+                <span className="font-semibold text-red-400">
+                  🎙️ Listening... pause 1s or click Stop to send command
                 </span>
               ) : (
-                <span>Click to speak war room commands out loud</span>
+                <span className="text-slate-400">Click to speak commands out loud</span>
               )}
             </div>
           </div>
 
           {isProcessing && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                fontSize: '0.72rem',
-                color: '#7c3aed',
-                fontWeight: 600,
-              }}
-            >
-              <Sparkles size={13} className="animate-spin" />
+            <div className="flex items-center gap-1.5 text-xs text-purple-400 font-semibold">
+              <Sparkles size={14} className="animate-spin" />
               <span>Synthesizing...</span>
             </div>
           )}
         </div>
 
-        {/* Live Interim Speech Preview when user is talking */}
+        {/* Live Interim Speech Preview */}
         {interimText && (
-          <div
-            style={{
-              padding: '0.5rem 0.75rem',
-              marginBottom: '0.75rem',
-              background: '#eff6ff',
-              border: '1px dashed #60a5fa',
-              borderRadius: '8px',
-              fontSize: '0.78rem',
-              color: '#1e40af',
-              fontStyle: 'italic',
-            }}
-          >
+          <div className="p-2.5 rounded-lg bg-indigo-950/40 border border-dashed border-indigo-500/50 text-xs text-indigo-200 italic">
             <strong>Heard:</strong> &ldquo;{interimText}&rdquo;...
           </div>
         )}
 
-        {/* Quick-Filter Chips Bar */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            marginBottom: '0.65rem',
-            overflowX: 'auto',
-            paddingBottom: '2px',
-          }}
-          aria-label="Filter transcript by speaker"
-        >
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           <button
             type="button"
             onClick={() => setFilterRole('ALL')}
-            style={{
-              padding: '3px 9px',
-              borderRadius: '6px',
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              border: filterRole === 'ALL' ? '1px solid #4f46e5' : '1px solid #e2e8f0',
-              background: filterRole === 'ALL' ? '#4f46e5' : '#f8fafc',
-              color: filterRole === 'ALL' ? '#ffffff' : '#64748b',
-              transition: 'all 0.15s ease',
-            }}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+              filterRole === 'ALL'
+                ? 'bg-indigo-600 border-indigo-400 text-white font-semibold shadow-sm'
+                : 'bg-[#151d30] border-[#1e293b] text-slate-400 hover:text-white'
+            }`}
           >
-            All ({counts.all})
+            <Filter size={10} />
+            <span>All ({counts.all})</span>
           </button>
           <button
             type="button"
             onClick={() => setFilterRole('AI')}
-            style={{
-              padding: '3px 9px',
-              borderRadius: '6px',
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              border: filterRole === 'AI' ? '1px solid #7c3aed' : '1px solid #e2e8f0',
-              background: filterRole === 'AI' ? '#7c3aed' : '#f8fafc',
-              color: filterRole === 'AI' ? '#ffffff' : '#64748b',
-              transition: 'all 0.15s ease',
-            }}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+              filterRole === 'AI'
+                ? 'bg-purple-600 border-purple-400 text-white font-semibold shadow-sm'
+                : 'bg-[#151d30] border-[#1e293b] text-slate-400 hover:text-purple-300'
+            }`}
           >
-            AI Commander ({counts.ai})
+            <Bot size={10} />
+            <span>AI Commander ({counts.ai})</span>
           </button>
           <button
             type="button"
             onClick={() => setFilterRole('ENGINEER')}
-            style={{
-              padding: '3px 9px',
-              borderRadius: '6px',
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              border: filterRole === 'ENGINEER' ? '1px solid #2563eb' : '1px solid #e2e8f0',
-              background: filterRole === 'ENGINEER' ? '#2563eb' : '#f8fafc',
-              color: filterRole === 'ENGINEER' ? '#ffffff' : '#64748b',
-              transition: 'all 0.15s ease',
-            }}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+              filterRole === 'ENGINEER'
+                ? 'bg-blue-600 border-blue-400 text-white font-semibold shadow-sm'
+                : 'bg-[#151d30] border-[#1e293b] text-slate-400 hover:text-blue-300'
+            }`}
           >
-            Engineers ({counts.engineers})
+            <User size={10} />
+            <span>Engineers ({counts.engineers})</span>
           </button>
           <button
             type="button"
             onClick={() => setFilterRole('SYSTEM')}
-            style={{
-              padding: '3px 9px',
-              borderRadius: '6px',
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              border: filterRole === 'SYSTEM' ? '1px solid #d97706' : '1px solid #e2e8f0',
-              background: filterRole === 'SYSTEM' ? '#d97706' : '#f8fafc',
-              color: filterRole === 'SYSTEM' ? '#ffffff' : '#64748b',
-              transition: 'all 0.15s ease',
-            }}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+              filterRole === 'SYSTEM'
+                ? 'bg-amber-600 border-amber-400 text-white font-semibold shadow-sm'
+                : 'bg-[#151d30] border-[#1e293b] text-slate-400 hover:text-amber-300'
+            }`}
           >
-            System Alerts ({counts.system})
+            <AlertTriangle size={10} />
+            <span>System Alerts ({counts.system})</span>
           </button>
         </div>
 
         {/* Audio Turns Scroll Area */}
         <div
-          className="voice-transcript-card"
           ref={scrollRef}
-          style={{ maxHeight: '280px', overflowY: 'auto' }}
+          className="max-h-[300px] overflow-y-auto space-y-2.5 p-3 rounded-xl border border-[#1e293b] bg-[#090d16]"
           id="voice-transcript-container"
         >
           {filteredTranscripts.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+            <div className="text-center py-8 text-slate-500 text-xs">
               {transcripts.length === 0
                 ? 'Awaiting audio input on voice bridge...'
                 : `No turns found for "${filterRole}".`}
@@ -567,42 +536,42 @@ export default function VoiceTranscriptStream(props) {
           ) : (
             filteredTranscripts.map((t, idx) => {
               const isUser = isUserSpeaker(t.speaker);
+              const isSystem =
+                (t.speaker || '').toLowerCase().includes('alert') ||
+                (t.text || '').toLowerCase().includes('database') ||
+                (t.text || '').toLowerCase().includes('p99');
+
               return (
                 <div
                   key={idx}
-                  className="voice-stream-item"
-                  style={{
-                    borderLeft: isUser ? '3px solid #3b82f6' : '3px solid #7c3aed',
-                    paddingLeft: '8px',
-                    marginBottom: '0.65rem',
-                  }}
+                  className={`p-3 rounded-lg border transition-all ${
+                    isUser
+                      ? 'border-blue-500/30 bg-[#0b162c]'
+                      : isSystem
+                      ? 'border-amber-500/30 bg-[#161210]'
+                      : 'border-purple-500/30 bg-[#0f1426]'
+                  }`}
                 >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: '0.15rem',
-                    }}
-                  >
+                  <div className="flex items-center justify-between mb-1.5">
                     <span
-                      className="voice-speaker-badge"
-                      style={{
-                        background: isUser ? '#eff6ff' : '#f5f3ff',
-                        color: isUser ? '#1d4ed8' : '#6d28d9',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                      }}
+                      className={`inline-flex items-center gap-1.5 text-xs font-bold font-mono ${
+                        isUser
+                          ? 'text-blue-400'
+                          : isSystem
+                          ? 'text-amber-400'
+                          : 'text-purple-400'
+                      }`}
                     >
-                      {isUser ? <Mic size={11} /> : <Bot size={11} />}
+                      {isUser ? <User size={12} /> : isSystem ? <Shield size={12} /> : <Bot size={12} />}
                       {t.speaker}
                     </span>
-                    <span className="font-mono text-dim" style={{ fontSize: '0.68rem' }}>
-                      {t.time}
-                    </span>
+                    {t.time && <span className="text-[10px] font-mono text-slate-500">{t.time}</span>}
                   </div>
-                  <p style={{ color: '#1e293b', fontSize: '0.825rem', lineHeight: '1.4' }}>
+                  <p
+                    className={`text-[12.5px] leading-relaxed ${
+                      isUser ? 'text-slate-200' : isSystem ? 'text-amber-100' : 'text-slate-100'
+                    }`}
+                  >
                     &ldquo;{t.text}&rdquo;
                   </p>
                 </div>
@@ -612,29 +581,18 @@ export default function VoiceTranscriptStream(props) {
         </div>
 
         {/* Quick Incident Simulation Preset Chips */}
-        <div style={{ marginTop: '0.85rem', marginBottom: '0.65rem' }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.35rem' }}>
-            QUICK VOICE COMMAND TRIGGERS (Updates Cards & Speaks Out Loud):
+        <div className="pt-1">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 font-mono">
+            QUICK VOICE COMMAND TRIGGERS:
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+          <div className="flex flex-wrap gap-1.5">
             {PRESET_COMMANDS.map((cmd, idx) => (
               <button
                 key={idx}
                 type="button"
                 onClick={() => submitUtterance(cmd.text)}
                 disabled={isProcessing}
-                style={{
-                  fontSize: '0.7rem',
-                  padding: '4px 8px',
-                  background: '#f1f5f9',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  color: '#334155',
-                  cursor: isProcessing ? 'wait' : 'pointer',
-                  fontWeight: 500,
-                  transition: 'all 0.15s ease',
-                  textAlign: 'left',
-                }}
+                className="text-[11px] px-2.5 py-1 rounded-md bg-[#151d30] border border-[#1e293b] text-slate-300 hover:text-white hover:border-indigo-500/50 hover:bg-[#1a2540] transition-all disabled:opacity-50 text-left font-medium"
               >
                 {cmd.label}
               </button>
@@ -643,41 +601,19 @@ export default function VoiceTranscriptStream(props) {
         </div>
 
         {/* Type-To-Speak Input Bar */}
-        <form onSubmit={handleFormSubmit} style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+        <form onSubmit={handleFormSubmit} className="flex gap-2 pt-1">
           <input
             type="text"
             value={inputCommand}
             onChange={(e) => setInputCommand(e.target.value)}
             placeholder="Type incident utterance or command (e.g. 'Rollback to v2.4.0')..."
             disabled={isProcessing}
-            style={{
-              flex: 1,
-              padding: '7px 12px',
-              fontSize: '0.8rem',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              outline: 'none',
-              background: '#ffffff',
-              color: '#0f172a',
-            }}
+            className="flex-1 px-3 py-2 text-xs rounded-lg border border-[#1e293b] bg-[#151d30] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
           />
           <button
             type="submit"
             disabled={isProcessing || !inputCommand.trim()}
-            style={{
-              padding: '7px 14px',
-              borderRadius: '8px',
-              border: 'none',
-              background: '#4f46e5',
-              color: '#ffffff',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              cursor: isProcessing || !inputCommand.trim() ? 'not-allowed' : 'pointer',
-              opacity: isProcessing || !inputCommand.trim() ? 0.6 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
           >
             <Send size={13} />
             <span>Send</span>

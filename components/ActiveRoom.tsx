@@ -45,6 +45,7 @@ import { RunbookQuickActions } from './RunbookQuickActions';
 import { FloatingAudioDock } from './FloatingAudioDock';
 import type { ActiveRoomProps, ConversationComponentProps } from '@/types/conversation';
 import { useAiSpeechHandler, stopAudibleSpeech, playAudibleSpeech } from '@/hooks/useAiSpeechHandler';
+import { voiceArbiter } from '@/lib/voiceArbiter';
 import { useIncidentContext } from '@/src/context/IncidentContext';
 import {
   useSpeechCapture,
@@ -202,7 +203,11 @@ export function ActiveRoom({
     TranscriptHelperItem<Partial<UserTranscription | AgentTranscription>>[]
   >([]);
 
-  // Guardrail: detect when Agora agent is actively streaming audio through WebRTC
+  // Detect when Agora cloud agent is configured/connected
+  const isAgoraAgentInRoom = useMemo(() => {
+    return remoteUsers.some((user) => user.uid.toString() === agentUID);
+  }, [remoteUsers, agentUID]);
+
   const isRemoteAgentAudioPlaying = useMemo(() => {
     return remoteUsers.some(
       (user) =>
@@ -212,8 +217,19 @@ export function ActiveRoom({
     );
   }, [remoteUsers, agentUID]);
 
-  // Single-source audio exclusivity: only suppress browser speech synthesis if Agora RTC audio is ACTUALLY actively playing
-  const isAgoraAudioActive = isRemoteAgentAudioPlaying;
+  const hasAgoraCredentials = Boolean(
+    process.env.NEXT_PUBLIC_AGORA_APP_ID && agoraData.token && agoraData.agentId,
+  );
+
+  // Single-source audio exclusivity: Agora SD-RTN is primary voice whenever connected
+  const isAgoraAudioActive = Boolean(hasAgoraCredentials || isAgoraAgentInRoom || joinSuccess);
+
+  useEffect(() => {
+    voiceArbiter.setAgoraVoiceActive(isAgoraAudioActive);
+    return () => {
+      voiceArbiter.setAgoraVoiceActive(false);
+    };
+  }, [isAgoraAudioActive]);
 
   const {
     processUserSpeech,
@@ -258,6 +274,7 @@ export function ActiveRoom({
   });
 
   // Initial bot greeting when responder joins the incident war room
+  // Strictly speaks ONCE, and ONLY via browser TTS if Agora cloud agent is NOT active
   const hasGreetedRef = useRef(false);
   useEffect(() => {
     if (!isReady || hasGreetedRef.current) return;
@@ -294,13 +311,15 @@ export function ActiveRoom({
         ];
       });
 
-      if (!isRemoteAgentAudioPlaying) {
-        playAudibleSpeech(greetingText);
+      // Single-voice guarantee: if Agora RTC cloud agent is configured, Agora plays the greeting.
+      // Do NOT trigger browser TTS when Agora is active.
+      if (!isAgoraAudioActive && !hasAgoraCredentials) {
+        playAudibleSpeech(greetingText, undefined, undefined, { isGreeting: true });
       }
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [isReady, agentUID, isRemoteAgentAudioPlaying]);
+  }, [isReady, agentUID, isAgoraAudioActive, hasAgoraCredentials]);
 
   // Restore historical conversation turns for this incident channel
   useEffect(() => {

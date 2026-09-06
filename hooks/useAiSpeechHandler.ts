@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { startAiTurn, type AiTurnMetrics } from '@/lib/aiMetrics';
 import type { SreAction } from '@/lib/sreTools';
 import type { IncidentStateDelta } from '@/app/api/ai/respond/route';
@@ -19,137 +19,24 @@ type RespondPayload = {
   actionsExecuted?: unknown;
 };
 
-let speechWatchdogInterval: ReturnType<typeof setInterval> | null = null;
+import { voiceArbiter } from '@/lib/voiceArbiter';
 
 export function stopAudibleSpeech() {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-  try {
-    if (speechWatchdogInterval) {
-      clearInterval(speechWatchdogInterval);
-      speechWatchdogInterval = null;
-    }
-    window.speechSynthesis.cancel();
-  } catch {}
+  voiceArbiter.stop();
 }
 
 export function playAudibleSpeech(
   text: string,
   onStart?: () => void,
   onEnd?: () => void,
+  options?: { isGreeting?: boolean; force?: boolean },
 ) {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-    onEnd?.();
-    return;
-  }
-  try {
-    stopAudibleSpeech();
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-    }
-    const clean = text.replace(/[*_#`]/g, '').trim();
-    if (!clean) {
-      onEnd?.();
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.rate = 1.05;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-
-    let hasStarted = false;
-    let hasEnded = false;
-
-    const cleanup = () => {
-      if (speechWatchdogInterval) {
-        clearInterval(speechWatchdogInterval);
-        speechWatchdogInterval = null;
-      }
-      if (!hasEnded) {
-        hasEnded = true;
-        onEnd?.();
-      }
-    };
-
-    utterance.onstart = () => {
-      hasStarted = true;
-      onStart?.();
-
-      // Chrome speech synthesis watchdog to prevent pause bug on long utterances
-      if (speechWatchdogInterval) clearInterval(speechWatchdogInterval);
-      speechWatchdogInterval = setInterval(() => {
-        if (!window.speechSynthesis.speaking) {
-          cleanup();
-        } else if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume();
-        }
-      }, 5000);
-    };
-
-    utterance.onend = () => {
-      cleanup();
-    };
-
-    utterance.onerror = (e) => {
-      if (e.error !== 'interrupted' && e.error !== 'canceled') {
-        console.warn('[EchoOps] Speech synthesis utterance error:', e.error);
-      }
-      cleanup();
-    };
-
-    const setVoiceAndSpeak = () => {
-      const voices = window.speechSynthesis.getVoices();
-      const preferredVoice =
-        voices.find(
-          (v) =>
-            v.lang.startsWith('en') &&
-            (v.name.includes('Natural') ||
-              v.name.includes('Google') ||
-              v.name.includes('Samantha') ||
-              v.name.includes('Daniel') ||
-              v.name.includes('Alex') ||
-              v.name.includes('Karen')),
-        ) || voices.find((v) => v.lang.startsWith('en'));
-
-      if (preferredVoice) {
-        utterance.voice = preferredVoice;
-      }
-
-      window.speechSynthesis.speak(utterance);
-
-      // Safety fallback: if utterance never fired onstart within 1s and isn't speaking
-      setTimeout(() => {
-        if (!hasStarted && !window.speechSynthesis.speaking) {
-          cleanup();
-        }
-      }, 1000);
-    };
-
-    const availableVoices = window.speechSynthesis.getVoices();
-    if (availableVoices.length > 0) {
-      setVoiceAndSpeak();
-    } else {
-      // Voices not loaded yet, wait for voiceschanged or timeout
-      let handled = false;
-      const onVoices = () => {
-        if (handled) return;
-        handled = true;
-        window.speechSynthesis.removeEventListener('voiceschanged', onVoices);
-        setVoiceAndSpeak();
-      };
-      window.speechSynthesis.addEventListener('voiceschanged', onVoices);
-      setTimeout(() => {
-        if (!handled) {
-          handled = true;
-          window.speechSynthesis.removeEventListener('voiceschanged', onVoices);
-          setVoiceAndSpeak();
-        }
-      }, 200);
-    }
-  } catch (err) {
-    console.warn('[EchoOps] Browser speech synthesis error:', err);
-    onEnd?.();
-  }
+  return voiceArbiter.speak(text, {
+    onStart,
+    onEnd,
+    isGreeting: options?.isGreeting,
+    force: options?.force,
+  });
 }
 
 type UseAiSpeechHandlerOptions = {
@@ -181,6 +68,16 @@ export function useAiSpeechHandler({
   onStateDeltaRef.current = onStateDelta;
   onBotSpeechRef.current = onBotSpeech;
   isAgoraAudioActiveRef.current = isAgoraAudioActive;
+
+  useEffect(() => {
+    voiceArbiter.setAgoraVoiceActive(isAgoraAudioActive);
+  }, [isAgoraAudioActive]);
+
+  useEffect(() => {
+    return voiceArbiter.addListener((speaking) => {
+      setIsSpeaking(speaking);
+    });
+  }, []);
 
   const processUserSpeech = useCallback(
     async (transcript: string, history: SpeechHistoryItem[] = []) => {
