@@ -16,7 +16,7 @@ import { useIncidentContext } from '../context/IncidentContext';
 export default function ActiveIncidentCard(props) {
   const context = useIncidentContext();
   const incident = props?.incident || context?.incident || {};
-  const metrics = context?.impactMetrics || {};
+  const metrics = props?.metrics || context?.impactMetrics || {};
 
   const incidentId = incident.incidentId || incident.id || 'inc-mtpz6hin';
   const severity = incident.severity || 'Sev-1';
@@ -28,11 +28,14 @@ export default function ActiveIncidentCard(props) {
     'High rate of HTTP 504 Gateway Timeouts and elevated API latency observed across checkout endpoints. Database worker connection pool is currently saturated.';
   const channelName = incident.channelName || incident.channel || 'echoops-war-room-042';
 
-  const activeImpact = metrics.activeImpact || incident.impact || '74% Checkout Transactions Failing';
-  const estRevenueLoss = metrics.estRevenueLoss || incident.estimatedRevenueImpact || '$42,000 / hr';
-  const slaBreachIn = metrics.slaBreachIn || incident.slaTimeRemaining || '12m 45s';
+  const activeImpact =
+    metrics.activeImpact || incident.activeImpact || incident.impact || '74% Checkout Transactions Failing';
+  const estRevenueLoss =
+    metrics.estRevenueLoss || incident.estRevenueLoss || incident.estimatedRevenueImpact || '$42,000 / hr';
+  const slaBreachIn =
+    metrics.slaBreachIn || incident.slaBreachIn || incident.slaTimeRemaining || '12m 45s';
   const impactedTraffic =
-    metrics.impactedTraffic || metrics.impactedCustomers || incident.impactedCustomers || '1,420 Users Affected';
+    metrics.impactedTraffic || incident.impactedTraffic || metrics.impactedCustomers || incident.impactedCustomers || '1,420 Users Affected';
 
   const isSev1 =
     String(severity).toUpperCase().includes('1') ||

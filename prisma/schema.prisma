@@ -1,0 +1,64 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Incident {
+  id               String          @id @default(cuid())
+  title            String
+  scenario         String          @default("tech_outage")
+  severity         String          @default("Sev-1")
+  status           String          @default("investigating")
+  channelName      String          @map("channel_name")
+  summary          String?
+  startedAt        DateTime        @default(now()) @map("started_at")
+  resolvedAt       DateTime?       @map("resolved_at")
+  unresolvedRisks  Json?           @default("[]") @map("unresolved_risks")
+  activeImpact     String?         @map("active_impact")
+  estRevenueLoss   String?         @map("est_revenue_loss")
+  slaBreachIn      String?         @map("sla_breach_in")
+  impactedTraffic  String?         @map("impacted_traffic")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  transcripts      Transcript[]
+  timelineEvents   TimelineEvent[]
+
+  @@map("incidents")
+}
+
+model Transcript {
+  id          String    @id @default(cuid())
+  incidentId  String?   @map("incident_id")
+  channelName String    @map("channel_name")
+  speaker     String
+  text        String
+  time        String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  incident    Incident? @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([channelName])
+  @@map("transcripts")
+}
+
+model TimelineEvent {
+  id          String    @id @default(cuid())
+  incidentId  String    @map("incident_id")
+  time        String
+  timestamp   BigInt
+  speaker     String
+  category    String
+  note        String
+  metadata    Json?     @default("{}")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  incident    Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+  @@map("timeline_events")
+}

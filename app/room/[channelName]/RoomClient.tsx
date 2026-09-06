@@ -29,6 +29,7 @@ import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 import { Button } from '@/components/ui/button';
 import { IncidentProvider } from '@/src/context/IncidentContext';
 import IncidentDashboard from '@/src/App';
+import { useRealtimeIncident } from '@/hooks/useRealtimeIncident';
 
 // Dynamically import ActiveRoom with ssr disabled to protect browser-only Agora SDK
 const ActiveRoom = dynamic(() => import('@/components/ActiveRoom'), {
@@ -77,6 +78,7 @@ export function RoomClient({ channelName }: RoomClientProps) {
   const cleanChannel = decodeURIComponent(channelName).trim() || 'echoops-war-room-042';
 
   const [viewMode, setViewMode] = useState<ViewMode>('split');
+  const { respondersCount: realtimeRespondersCount } = useRealtimeIncident(cleanChannel);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [micWarning, setMicWarning] = useState<string | null>(null);
@@ -427,6 +429,14 @@ export function RoomClient({ channelName }: RoomClientProps) {
               <h1 className="text-sm font-bold tracking-tight text-slate-900 dark:text-white font-mono">
                 WAR ROOM: {cleanChannel}
               </h1>
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900 flex items-center gap-1"
+                id="room-realtime-responders-badge"
+                title="Connected Responders synced in real-time via Supabase Presence"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>{realtimeRespondersCount} Connected</span>
+              </span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900">
                 {isLocalVoiceMode ? 'LOCAL AI' : 'AGORA SD-RTN'}
               </span>
